@@ -4,6 +4,7 @@ from tkinter import ttk, Label, Scrollbar, Text, Button, font
 import threading
 import queue
 import configparser
+os.environ['OS_ACTIVITY_DT_MODE'] = 'disable' 
 
 # default values
 default_intruction = "Answer the QUESTION, and consider the history conversation in CONTEXT, if no context or no valuable info in the context, just directly answer the question."
@@ -86,11 +87,12 @@ class ChatApp:
         self.root.title("AWS Bedrock ChatApp(TK GUI) - by James Huang")
         self.root.geometry('1200x726')
         # Set the column and row weights
-        self.root.grid_columnconfigure(0, weight=1)
-        self.root.grid_columnconfigure(1, weight=0)
+        self.root.grid_columnconfigure(0, weight=4)
+        self.root.grid_columnconfigure(1, weight=1)
         self.root.grid_rowconfigure(0, weight=0)
         self.root.grid_rowconfigure(1, weight=1)
         self.root.grid_rowconfigure(2, weight=0)
+        custom_font = font.Font(size=14)
 
         # Create a frame for the profile and region selectors
         selector_frame = tk.Frame(root)
@@ -100,7 +102,7 @@ class ChatApp:
         profiles = get_profiles()
         self.profile_var = tk.StringVar()
         self.profile_var.set(profiles[0] if profiles else "No Profile Found")
-        self.profile_menu = ttk.Combobox(selector_frame, width=15, textvariable=self.profile_var, values=profiles)
+        self.profile_menu = ttk.Combobox(selector_frame, width=10, textvariable=self.profile_var, values=profiles)
         self.profile_menu.pack(side=tk.LEFT)
         self.profile_menu.bind("<<ComboboxSelected>>", self.change_profile_region)
 
@@ -108,7 +110,7 @@ class ChatApp:
         regions = get_regions()
         self.region_var = tk.StringVar()
         self.region_var.set(regions[0] if regions else "No Region Found")
-        self.region_menu = ttk.Combobox(selector_frame, width=15, textvariable=self.region_var, values=regions)
+        self.region_menu = ttk.Combobox(selector_frame, width=10, textvariable=self.region_var, values=regions)
         self.region_menu.pack(side=tk.LEFT)
         self.region_menu.bind("<<ComboboxSelected>>", self.change_profile_region)
 
@@ -116,32 +118,21 @@ class ChatApp:
         modelIds = get_modelIds()
         self.modelId_var = tk.StringVar()
         self.modelId_var.set(modelIds[0] if modelIds else "No ModelId Found")
-        self.modelId_menu = ttk.Combobox(selector_frame, width=25, textvariable=self.modelId_var, values=modelIds)
+        self.modelId_menu = ttk.Combobox(selector_frame, width=20, textvariable=self.modelId_var, values=modelIds)
         self.modelId_menu.pack(side=tk.LEFT)
         self.modelId_menu.bind("<<ComboboxSelected>>", self.change_modelId)
+
+        Label(selector_frame, text="Font: ").pack(side=tk.LEFT)
+        fontSize = ('8', '10', '12', '14', '16', '18', '20', '22', '24', '26', '28')
+        self.fontSize_var = tk.StringVar()
+        self.fontSize_var.set(fontSize[3] if fontSize else "No Font Found")
+        self.fontSize_menu = ttk.Combobox(selector_frame, width=5, textvariable=self.fontSize_var, values=fontSize)
+        self.fontSize_menu.pack(side=tk.LEFT)
+        self.fontSize_menu.bind("<<ComboboxSelected>>", self.change_fontSize)
 
         lable_frame = tk.Frame(root)
         lable_frame.grid(row=0, column=1, padx=5, pady=5, sticky='w')
         Label(lable_frame, text="Inference Para: ").pack(side=tk.LEFT)
-        
-        custom_font = font.Font(size=12)
-        # Create a frame for the bedrock_para JSON text and scrollbar
-        bedrock_para_frame = tk.Frame(root)
-        bedrock_para_frame.grid(row=1, column=1, padx=5, pady=5, sticky='nsew')
-        bedrock_para_frame.grid_columnconfigure(0, weight=1)
-        bedrock_para_frame.grid_rowconfigure(0, weight=1)        
-
-        self.bedrock_para = tk.StringVar()
-        self.bedrock_para.set(json.dumps(default_para, indent=1)) 
-        self.bedrock_para_text = Text(bedrock_para_frame, font=custom_font, width=20)
-        self.bedrock_para_text.insert(tk.END, self.bedrock_para.get())
-        self.bedrock_para_text.grid(row=0, column=0, sticky='nsew')
-
-        self.instruction_var = tk.StringVar()
-        self.instruction_var.set(default_intruction)
-        self.instruction_text = Text(bedrock_para_frame, font=custom_font, width=20)
-        self.instruction_text.insert(tk.END, default_intruction)
-        self.instruction_text.grid(row=1, column=0, sticky='nsew')
 
         # Create a frame for the text history and scrollbar
         history_frame = tk.Frame(root)
@@ -156,6 +147,26 @@ class ChatApp:
         self.history.pack(fill=tk.BOTH, expand=True)
 
         self.scrollbar.config(command=self.history.yview)
+        
+        # Create a frame for the bedrock_para JSON text and scrollbar
+        bedrock_para_frame = tk.Frame(root)
+        bedrock_para_frame.grid(row=1, column=1, padx=5, pady=5, sticky='nsew')
+        bedrock_para_frame.grid_columnconfigure(0, weight=1)
+        bedrock_para_frame.grid_rowconfigure(0, weight=1)
+        bedrock_para_frame.grid_rowconfigure(1, weight=1)        
+
+        self.bedrock_para = tk.StringVar()
+        self.bedrock_para.set(json.dumps(default_para, indent=1)) 
+        self.bedrock_para_text = Text(bedrock_para_frame, font=custom_font, width=15)
+        self.bedrock_para_text.insert(tk.END, self.bedrock_para.get())
+        self.bedrock_para_text.grid(row=0, column=0, sticky='nsew')
+
+        self.instruction_var = tk.StringVar()
+        self.instruction_var.set(default_intruction)
+        self.instruction_text = Text(bedrock_para_frame, font=custom_font, width=15)
+        self.instruction_text.insert(tk.END, default_intruction)
+        self.instruction_text.grid(row=1, column=0, sticky='nsew')
+
 
         # Create a frame for the input and buttons
         input_frame = tk.Frame(root)
@@ -165,18 +176,22 @@ class ChatApp:
 
         self.entry = Text(input_frame, height=4, font=custom_font)
         self.entry.pack(fill=tk.X, expand=True, side=tk.LEFT)
+        self.entry.bind("<Shift-Return>", self.just_enter)
+        self.entry.bind("<Command-Return>", self.just_enter)
         self.entry.bind("<Return>", self.send_message)
+        self.entry.focus_set()
 
         button_frame = tk.Frame(root)
         button_frame.grid(row=2, column=1, padx=5, pady=5, sticky='ew')
         button_frame.grid_columnconfigure(0, weight=0)
-        button_frame.grid_rowconfigure(0, weight=0)
+        button_frame.grid_rowconfigure(0, weight=1)
 
-        self.send_button = Button(button_frame, text="Send", command=self.send_message)
-        self.send_button.pack(side=tk.LEFT)
-
-        self.clear_button = Button(button_frame, text="Clear", command=self.clear_history)
-        self.clear_button.pack(side=tk.LEFT)
+        self.send_button = Button(button_frame, text="Send", command=self.send_message, width=8)
+        self.send_button.grid(row=0, column=0, sticky='ew')
+        self.clear_button = Button(button_frame, text="Clear", command=self.clear_history, width=8)
+        self.clear_button.grid(row=1, column=0, sticky='ew')
+        self.history_num = Label(button_frame, text="History: 0")
+        self.history_num.grid(row=1, column=2, sticky='ew')
 
         self.change_profile_region()
         self.change_modelId()
@@ -193,12 +208,29 @@ class ChatApp:
         self.bedrock_para_text.delete("1.0", tk.END)
         self.bedrock_para_text.insert(tk.END, json.dumps(default_para[self.modelId], indent=1))
 
+    def change_fontSize(self, event=None):
+        self.fontSize = self.fontSize_var.get()
+        self.custom_font = font.Font(size=int(self.fontSize))
+        self.history.config(font=self.custom_font)
+        self.entry.config(font=self.custom_font)
+        self.bedrock_para_text.config(font=self.custom_font)
+        self.instruction_text.config(font=self.custom_font)
+
     def save_history(self, history_record):     
         self.chat_history.append(history_record)
+        self.history_num.config(text=f"History: {len(self.chat_history)}")
+
+    def just_enter(self, event=None):
+        return
 
     # 发送消息按钮
     def send_message(self, event=None):
-        try: 
+        try:
+            # Pause input and send button
+            self.send_button.config(state=tk.DISABLED)
+            self.entry.unbind("<Return>")
+
+            # Construct context
             context = json.dumps(self.chat_history)
             question = self.entry.get("1.0", tk.END).strip()
             self.history.insert(tk.END, "You: " + question + '\n')
@@ -245,6 +277,7 @@ class ChatApp:
         self.queue.put(answers)
         logger.info(answers)
         self.chat_history = []
+        self.history_num.config(text=f"History: {len(self.chat_history)}")
 
     # 异步调用Bedrock API
     def generate_reply(self, invoke_body):
@@ -285,6 +318,8 @@ class ChatApp:
         self.save_history(history_record)
         logger.info(history_record)
         self.queue.put("\n---END---\n\n")
+        self.send_button.config(state=tk.NORMAL)
+        self.entry.bind("<Return>", self.send_message)
         return
 
     # 异步打印Bedrock返回消息
