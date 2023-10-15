@@ -233,7 +233,7 @@ class ChatApp:
             # Construct context
             context = json.dumps(self.chat_history)
             question = self.entry.get("1.0", tk.END).strip()
-            self.history.insert(tk.END, "You: " + question + '\n')
+            self.history.insert(tk.END, "You: " + question + '\n\n')
             self.history.see(tk.END)
             history_record = f"History Question: {question}\n"
             self.save_history(history_record)
