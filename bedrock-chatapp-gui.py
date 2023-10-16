@@ -70,7 +70,7 @@ default_para = {                            # 可以在运行之后的界面上�
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
-file_handler = logging.FileHandler('./bedrock_chatapp_history.log')
+file_handler = logging.FileHandler('./bedrock_chatapp_history.log', encoding='utf8')
 file_handler.setLevel(logging.INFO)
 formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s', datefmt='%Y%m%d %H:%M:%S')
 file_handler.setFormatter(formatter)
@@ -111,7 +111,7 @@ class ChatApp:
         self.root.grid_rowconfigure(0, weight=0)
         self.root.grid_rowconfigure(1, weight=1)
         self.root.grid_rowconfigure(2, weight=0)
-        custom_font = font.Font(size=14)
+        custom_font = font.Font(size=12)
 
         # Create a frame for the profile and region selectors
         selector_frame = tk.Frame(root)
@@ -144,7 +144,7 @@ class ChatApp:
         Label(selector_frame, text="Font: ").pack(side=tk.LEFT)
         fontSize = ('8', '10', '12', '14', '16', '18', '20', '22', '24', '26', '28')
         self.fontSize_var = tk.StringVar()
-        self.fontSize_var.set(fontSize[3] if fontSize else "No Font Found")
+        self.fontSize_var.set(fontSize[2] if fontSize else "No Font Found")
         self.fontSize_menu = ttk.Combobox(selector_frame, width=5, textvariable=self.fontSize_var, values=fontSize)
         self.fontSize_menu.pack(side=tk.LEFT)
         self.fontSize_menu.bind("<<ComboboxSelected>>", self.change_fontSize)
@@ -195,9 +195,10 @@ class ChatApp:
 
         self.entry = Text(input_frame, height=4, font=custom_font)
         self.entry.pack(fill=tk.X, expand=True, side=tk.LEFT)
+        self.entry.bind("<Return>", self.send_message)
+        self.entry.bind("<Alt-s>", self.send_message)
         self.entry.bind("<Shift-Return>", self.just_enter)
         self.entry.bind("<Command-Return>", self.just_enter)
-        self.entry.bind("<Return>", self.send_message)
         self.entry.focus_set()
 
         button_frame = tk.Frame(root)
@@ -205,7 +206,7 @@ class ChatApp:
         button_frame.grid_columnconfigure(0, weight=0)
         button_frame.grid_rowconfigure(0, weight=1)
 
-        self.send_button = Button(button_frame, text="Send", command=self.send_message, width=8)
+        self.send_button = Button(button_frame, text="Send", command=self.send_message, underline=0, width=8)
         self.send_button.grid(row=0, column=0, sticky='ew')
         self.clear_button = Button(button_frame, text="Clear", command=self.clear_history, width=8)
         self.clear_button.grid(row=1, column=0, sticky='ew')
@@ -248,6 +249,7 @@ class ChatApp:
             # Pause input and send button
             self.send_button.config(state=tk.DISABLED)
             self.entry.unbind("<Return>")
+            self.entry.unbind("<Alt-s>")
 
             # Construct context
             context = json.dumps(self.chat_history)
@@ -261,8 +263,8 @@ class ChatApp:
             # 这里修改默认的 Promot 模版
             instruction = self.instruction_text.get("1.0", tk.END).strip()
             prompt = f"""\n\nHuman: "{instruction}"\n
-                        CONTEXT: "{context}"\n
-                        QUESTION: "{question}"\n
+                        <CONTEXT>\n{context}\n</CONTEXT>\n
+                        <QUESTION>\n{question}\n</QUESTION>\n
                         Assistant:"""
             # 部分模型不需要 CONTEXT，直接输出 QUESTION
             if self.modelId.startswith("amazon.titan-embed-text"):
@@ -339,6 +341,7 @@ class ChatApp:
         self.queue.put("\n---END---\n\n")
         self.send_button.config(state=tk.NORMAL)
         self.entry.bind("<Return>", self.send_message)
+        self.entry.bind("<Alt-s>", self.send_message)
         return
 
     # 异步打印Bedrock返回消息
