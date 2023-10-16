@@ -81,6 +81,25 @@ def get_profiles():
     config.read(os.path.expanduser('~/.aws/credentials'))
     return config.sections()
 
+def set_profile():
+    pro_conf = configparser.RawConfigParser()
+    pro_path = os.path.join(os.path.expanduser("~"), ".aws")
+    cre_path = os.path.join(pro_path, "credentials")
+    if not os.path.exists(cre_path):
+        print(f"There is no aws_access_key in {cre_path}, please input IAM User Credentials for your AWS account: ")
+        if not os.path.exists(pro_path):
+            os.mkdir(pro_path)
+        aws_access_key_id = input('aws_access_key_id: ')
+        aws_secret_access_key = input('aws_secret_access_key: ')
+        region = input('region(e.g. us-east-1): ')
+        pro_conf.add_section('default')
+        pro_conf['default']['aws_access_key_id'] = aws_access_key_id
+        pro_conf['default']['aws_secret_access_key'] = aws_secret_access_key
+        pro_conf['default']['region'] = region
+        with open(cre_path, 'w') as f:
+            print(f"Saving credentials to {cre_path}")
+            pro_conf.write(f)
+
 class ChatApp:
     def __init__(self, root):
         self.root = root
@@ -333,6 +352,7 @@ class ChatApp:
 
 # Main
 if __name__ == '__main__':
+    set_profile()
     logger.info("Starting... logging to ./bedrock_chatapp_history.log")
     root = tk.Tk()
     app = ChatApp(root)
