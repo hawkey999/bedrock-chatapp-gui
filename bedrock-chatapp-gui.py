@@ -13,7 +13,7 @@ accept = 'application/json'
 contentType = 'application/json'
 
 def get_regions():
-    return ('us-east-1', 'us-west-2', 'ap-southeast-1', 'ap-northeast-1')
+    return ('us-east-1', 'us-west-2', 'ap-southeast-1', 'ap-northeast-1', 'eu-central-1')
 
 def get_modelIds():
     return ('anthropic.claude-v2', 'anthropic.claude-instant-v1', 'anthropic.claude-v1', 'amazon.titan-embed-text-v1', 'amazon.titan-text-express-v1', 'cohere.command-text-v14', 'ai21.j2-mid-v1', 'ai21.j2-ultra-v1')
@@ -256,7 +256,7 @@ class ChatApp:
             question = self.entry.get("1.0", tk.END).strip()
             self.history.insert(tk.END, "You: " + question + '\n\n')
             self.history.see(tk.END)
-            history_record = f"History Question: {question}\n"
+            history_record = f"Human QUESTION: {question}\n"
             self.save_history(history_record)
             logger.info(history_record)
 
@@ -335,7 +335,7 @@ class ChatApp:
         except Exception as e:
             self.queue.put(f"\n\nException Error: {str(e)}\n")
         
-        history_record = f"History Answer: {answers}\n---END---\n"
+        history_record = f"Assistant Answer: {answers}\n---END---\n"
         self.save_history(history_record)
         logger.info(history_record)
         self.queue.put("\n---END---\n\n")
