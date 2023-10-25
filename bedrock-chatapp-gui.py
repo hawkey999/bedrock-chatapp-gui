@@ -7,16 +7,20 @@ import configparser
 os.environ['OS_ACTIVITY_DT_MODE'] = 'disable' 
 
 # default values
-default_intruction = "Answer the QUESTION, and consider the history conversation in CONTEXT, if no context or no valuable info in the context, just directly answer the question."
+custom_font_size = 12
 MAX_RETRIES = 3 
 accept = 'application/json'
 contentType = 'application/json'
+default_intruction = "Answer the QUESTION, and consider the previous conversation in CONTEXT, if there is no context or no valuable information in the context, just directly answer the question."
 
 def get_regions():
     return ('us-east-1', 'us-west-2', 'ap-southeast-1', 'ap-northeast-1', 'eu-central-1')
 
 def get_modelIds():
-    return ('anthropic.claude-v2', 'anthropic.claude-instant-v1', 'anthropic.claude-v1', 'amazon.titan-embed-text-v1', 'amazon.titan-text-express-v1', 'cohere.command-text-v14', 'ai21.j2-mid-v1', 'ai21.j2-ultra-v1')
+    return ('anthropic.claude-v2', 'anthropic.claude-instant-v1', 'anthropic.claude-v1', 'amazon.titan-embed-text-v1', 'amazon.titan-text-express-v1', 'amazon.titan-text-lite-v1', 'amazon.titan-text-agile-v1', 'cohere.command-text-v14', 'ai21.j2-mid-v1', 'ai21.j2-ultra-v1')
+
+def get_endpoints():
+    return ('default', 'internal')
 
 default_para = {                            # 可以在运行之后的界面上修改
     "anthropic.claude-v2": {
@@ -41,10 +45,28 @@ default_para = {                            # 可以在运行之后的界面上�
     "amazon.titan-embed-text-v1": {
     },
     "amazon.titan-text-express-v1": {
-        "maxTokenCount": 8192,
-        "stopSequences": [],
-        "temperature":0,
-        "topP":1
+        "textGenerationConfig": {
+            "maxTokenCount": 4096,
+            "stopSequences": [],
+            "temperature":0.5,
+            "topP":1
+        }
+    },
+    "amazon.titan-text-lite-v1": {
+        "textGenerationConfig": {
+            "maxTokenCount": 4096,
+            "stopSequences": [],
+            "temperature":0.5,
+            "topP":1
+        }
+    },
+    "amazon.titan-text-agile-v1": {
+        "textGenerationConfig": {
+            "maxTokenCount": 4096,
+            "stopSequences": [],
+            "temperature":0.5,
+            "topP":1
+        }
     },
     "cohere.command-text-v14": {
         "max_tokens": 100,
@@ -103,37 +125,38 @@ def set_profile():
 class ChatApp:
     def __init__(self, root):
         self.root = root
+        # self.root.configure(bg='white')
         self.root.title("AWS Bedrock ChatApp(TK GUI) - by James Huang")
-        self.root.geometry('1200x726')
+        self.root.geometry('1200x768')
         # Set the column and row weights
         self.root.grid_columnconfigure(0, weight=4)
         self.root.grid_columnconfigure(1, weight=1)
         self.root.grid_rowconfigure(0, weight=0)
         self.root.grid_rowconfigure(1, weight=1)
         self.root.grid_rowconfigure(2, weight=0)
-        custom_font = font.Font(size=12)
+        custom_font = font.Font(size=custom_font_size)
 
         # Create a frame for the profile and region selectors
         selector_frame = tk.Frame(root)
         selector_frame.grid(row=0, column=0, padx=5, pady=5, sticky='w')
 
-        Label(selector_frame, text="AWS Profile: ").pack(side=tk.LEFT)
+        Label(selector_frame, text="AWS Profile").pack(side=tk.LEFT)
         profiles = get_profiles()
         self.profile_var = tk.StringVar()
         self.profile_var.set(profiles[0] if profiles else "No Profile Found")
-        self.profile_menu = ttk.Combobox(selector_frame, width=10, textvariable=self.profile_var, values=profiles)
+        self.profile_menu = ttk.Combobox(selector_frame, width=5, textvariable=self.profile_var, values=profiles)
         self.profile_menu.pack(side=tk.LEFT)
         self.profile_menu.bind("<<ComboboxSelected>>", self.change_profile_region)
 
-        Label(selector_frame, text="Bedrock Region: ").pack(side=tk.LEFT)
+        Label(selector_frame, text="Bedrock Region").pack(side=tk.LEFT)
         regions = get_regions()
         self.region_var = tk.StringVar()
-        self.region_var.set(regions[0] if regions else "No Region Found")
+        self.region_var.set(regions[1] if regions else "No Region Found")
         self.region_menu = ttk.Combobox(selector_frame, width=10, textvariable=self.region_var, values=regions)
         self.region_menu.pack(side=tk.LEFT)
         self.region_menu.bind("<<ComboboxSelected>>", self.change_profile_region)
 
-        Label(selector_frame, text="ModelId: ").pack(side=tk.LEFT)
+        Label(selector_frame, text="Model Id").pack(side=tk.LEFT)
         modelIds = get_modelIds()
         self.modelId_var = tk.StringVar()
         self.modelId_var.set(modelIds[0] if modelIds else "No ModelId Found")
@@ -141,17 +164,25 @@ class ChatApp:
         self.modelId_menu.pack(side=tk.LEFT)
         self.modelId_menu.bind("<<ComboboxSelected>>", self.change_modelId)
 
-        Label(selector_frame, text="Font: ").pack(side=tk.LEFT)
+        Label(selector_frame, text="Font").pack(side=tk.LEFT)
         fontSize = ('8', '10', '12', '14', '16', '18', '20', '22', '24', '26', '28')
         self.fontSize_var = tk.StringVar()
-        self.fontSize_var.set(fontSize[2] if fontSize else "No Font Found")
-        self.fontSize_menu = ttk.Combobox(selector_frame, width=5, textvariable=self.fontSize_var, values=fontSize)
+        self.fontSize_var.set(str(custom_font.cget("size")) if fontSize else "No Font Found")
+        self.fontSize_menu = ttk.Combobox(selector_frame, width=3, textvariable=self.fontSize_var, values=fontSize)
         self.fontSize_menu.pack(side=tk.LEFT)
         self.fontSize_menu.bind("<<ComboboxSelected>>", self.change_fontSize)
 
+        Label(selector_frame, text="Endpoint").pack(side=tk.LEFT)
+        endpoints = get_endpoints()
+        self.endpoint_var = tk.StringVar()
+        self.endpoint_var.set(endpoints[0] if endpoints else "No Endpoints Found")
+        self.endpoint_var_menu = ttk.Combobox(selector_frame, width=5, textvariable=self.endpoint_var, values=endpoints)
+        self.endpoint_var_menu.pack(side=tk.LEFT)
+        self.endpoint_var_menu.bind("<<ComboboxSelected>>", self.change_profile_region)
+
         lable_frame = tk.Frame(root)
         lable_frame.grid(row=0, column=1, padx=5, pady=5, sticky='w')
-        Label(lable_frame, text="Inference Para: ").pack(side=tk.LEFT)
+        Label(lable_frame, text="Inference Para").pack(side=tk.LEFT)
 
         # Create a frame for the text history and scrollbar
         history_frame = tk.Frame(root)
@@ -222,6 +253,7 @@ class ChatApp:
     def change_profile_region(self, event=None):
         self.profile = self.profile_var.get()
         self.region = self.region_var.get()
+        self.endpoint = self.endpoint_var.get()
 
     def change_modelId(self, event=None):
         self.modelId = self.modelId_var.get()
@@ -304,11 +336,16 @@ class ChatApp:
     def generate_reply(self, invoke_body):
         answers = ""
         try:
-            # Invoke streaming model
-            session = boto3.Session(profile_name=self.profile)
+            # 每次调用都创建一个新的连接，避免idle导致连接断开，从而输入无响应等问题
+            session = boto3.Session(profile_name=self.profile) 
             config = botocore.config.Config(retries={'max_attempts': MAX_RETRIES})
-            self.client = session.client("bedrock-runtime", region_name=self.region, config=config)
-        
+            if self.endpoint == "default":
+                self.client = session.client("bedrock-runtime", region_name=self.region, config=config)
+            elif self.endpoint == "internal":
+                self.client = session.client("bedrock-runtime", region_name=self.region, config=config,
+                                         endpoint_url="https://prod.us-west-2.dataplane.bedrock.aws.dev")
+
+            # Invoke streaming model 
             if self.modelId.startswith("anthropic.claude"):
                 response = self.client.invoke_model_with_response_stream(body=invoke_body, modelId=self.modelId, accept=accept, contentType=contentType)
                 for event in response['body']:
@@ -316,7 +353,14 @@ class ChatApp:
                     answer = chunk_str.get('completion')
                     self.queue.put(answer)
                     answers += answer
-            
+            if self.modelId.startswith("amazon.titan-text"):
+                response = self.client.invoke_model_with_response_stream(body=invoke_body, modelId=self.modelId, accept=accept, contentType=contentType)
+                for event in response['body']:
+                    chunk_str = json.loads(event['chunk']['bytes'].decode('utf-8'))
+                    answer = chunk_str.get('outputText')
+                    self.queue.put(answer)
+                    answers += answer
+
             # Invoke non-streaming model
             else:
                 response = self.client.invoke_model(body=invoke_body, modelId=self.modelId, accept=accept, contentType=contentType)
@@ -324,6 +368,10 @@ class ChatApp:
             if self.modelId.startswith("amazon.titan-embed"):
                 answers = json.dumps(response_body.get('embedding'))
                 self.queue.put(answers)
+            # elif self.modelId.startswith("amazon.titan-text"):
+            #     for a in response_body.get('results'):
+            #         answers += a.get('outputText')
+            #     self.queue.put(answers)
             elif self.modelId.startswith("cohere.command-text"):
                 for answer in response_body.get('generations'):
                     answers += answer.get('text')
