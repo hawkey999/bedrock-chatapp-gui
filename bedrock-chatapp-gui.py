@@ -24,20 +24,20 @@ def get_endpoints():
 
 default_para = {                            # 可以在运行之后的界面上修改
     "anthropic.claude-v2": {
-        "max_tokens_to_sample": 8*1024-1,   # 最大输出的Token数量是8K，最大输入不需要填写，Claude默认100K
+        "max_tokens_to_sample": 8191,   # 最大输出的Token数量是8K，最大输入不需要填写，Claude默认100K
         "temperature": 0.5,                 # Use a lower value to decrease randomness in the response. Claude 0-1, default 0.5
         "top_k": 250,                       # Use a lower value to ignore less probable options.  Claude 0-500, default 250
         "top_p": 1,                         # Specify the number of token choices the model uses to generate the next token. Claude 0-1, default 1
         "stop_sequences": ["\\n\\nHuman:"],
         },    
     "anthropic.claude-instant-v1": {
-        "max_tokens_to_sample": 8*1024-1, 
+        "max_tokens_to_sample": 8191, 
         "temperature": 0.5,
         "top_k": 250,
         "top_p": 1,
         },
     "anthropic.claude-v1": {
-        "max_tokens_to_sample": 8*1024-1, 
+        "max_tokens_to_sample": 8191, 
         "temperature": 0.5,
         "top_k": 250,
         "top_p": 1,
@@ -69,20 +69,20 @@ default_para = {                            # 可以在运行之后的界面上�
         }
     },
     "cohere.command-text-v14": {
-        "max_tokens": 100,
-        "temperature": 0.8
+        "max_tokens": 2048,
+        "temperature": 0.5
     },
     "ai21.j2-mid-v1": {
-        "maxTokens": 200,
-        "temperature": 0,
+        "maxTokens": 8191,
+        "temperature": 0.5,
         "topP": 1,
         "countPenalty": {"scale": 0},
         "presencePenalty": {"scale": 0},
         "frequencyPenalty": {"scale": 0}
     },
     "ai21.j2-ultra-v1": {
-        "maxTokens": 200,
-        "temperature": 0,
+        "maxTokens": 8191,
+        "temperature": 0.5,
         "topP": 1,
         "countPenalty": {"scale": 0},
         "presencePenalty": {"scale": 0},
@@ -148,7 +148,7 @@ class ChatApp:
         self.profile_menu.pack(side=tk.LEFT)
         self.profile_menu.bind("<<ComboboxSelected>>", self.change_profile_region)
 
-        Label(selector_frame, text="Bedrock Region").pack(side=tk.LEFT)
+        Label(selector_frame, text="Region").pack(side=tk.LEFT)
         regions = get_regions()
         self.region_var = tk.StringVar()
         self.region_var.set(regions[1] if regions else "No Region Found")
@@ -156,7 +156,15 @@ class ChatApp:
         self.region_menu.pack(side=tk.LEFT)
         self.region_menu.bind("<<ComboboxSelected>>", self.change_profile_region)
 
-        Label(selector_frame, text="Model Id").pack(side=tk.LEFT)
+        Label(selector_frame, text="Endpoint").pack(side=tk.LEFT)
+        endpoints = get_endpoints()
+        self.endpoint_var = tk.StringVar()
+        self.endpoint_var.set(endpoints[0] if endpoints else "No Endpoints Found")
+        self.endpoint_var_menu = ttk.Combobox(selector_frame, width=5, textvariable=self.endpoint_var, values=endpoints)
+        self.endpoint_var_menu.pack(side=tk.LEFT)
+        self.endpoint_var_menu.bind("<<ComboboxSelected>>", self.change_profile_region)
+
+        Label(selector_frame, text="Model").pack(side=tk.LEFT)
         modelIds = get_modelIds()
         self.modelId_var = tk.StringVar()
         self.modelId_var.set(modelIds[0] if modelIds else "No ModelId Found")
@@ -171,14 +179,6 @@ class ChatApp:
         self.fontSize_menu = ttk.Combobox(selector_frame, width=3, textvariable=self.fontSize_var, values=fontSize)
         self.fontSize_menu.pack(side=tk.LEFT)
         self.fontSize_menu.bind("<<ComboboxSelected>>", self.change_fontSize)
-
-        Label(selector_frame, text="Endpoint").pack(side=tk.LEFT)
-        endpoints = get_endpoints()
-        self.endpoint_var = tk.StringVar()
-        self.endpoint_var.set(endpoints[0] if endpoints else "No Endpoints Found")
-        self.endpoint_var_menu = ttk.Combobox(selector_frame, width=5, textvariable=self.endpoint_var, values=endpoints)
-        self.endpoint_var_menu.pack(side=tk.LEFT)
-        self.endpoint_var_menu.bind("<<ComboboxSelected>>", self.change_profile_region)
 
         lable_frame = tk.Frame(root)
         lable_frame.grid(row=0, column=1, padx=5, pady=5, sticky='w')
@@ -226,20 +226,21 @@ class ChatApp:
 
         self.entry = Text(input_frame, height=4, font=custom_font)
         self.entry.pack(fill=tk.X, expand=True, side=tk.LEFT)
+        self.entry.focus_set()
         self.entry.bind("<Return>", self.send_message)
-        self.entry.bind("<Alt-s>", self.send_message)
+        self.entry.bind("<Control-s>", self.send_message)
         self.entry.bind("<Shift-Return>", self.just_enter)
         self.entry.bind("<Command-Return>", self.just_enter)
-        self.entry.focus_set()
+        self.entry.bind("<Control-l>", self.clear_history)
 
         button_frame = tk.Frame(root)
         button_frame.grid(row=2, column=1, padx=5, pady=5, sticky='ew')
         button_frame.grid_columnconfigure(0, weight=0)
         button_frame.grid_rowconfigure(0, weight=1)
 
-        self.send_button = Button(button_frame, text="Send", command=self.send_message, underline=0, width=8)
+        self.send_button = Button(button_frame, text="SEND", command=self.send_message, underline=0, width=8)
         self.send_button.grid(row=0, column=0, sticky='ew')
-        self.clear_button = Button(button_frame, text="Clear", command=self.clear_history, width=8)
+        self.clear_button = Button(button_frame, text="CLEAR", command=self.clear_history, underline=1, width=8)
         self.clear_button.grid(row=1, column=0, sticky='ew')
         self.history_num = Label(button_frame, text="History: 0")
         self.history_num.grid(row=1, column=2, sticky='ew')
@@ -281,7 +282,7 @@ class ChatApp:
             # Pause input and send button
             self.send_button.config(state=tk.DISABLED)
             self.entry.unbind("<Return>")
-            self.entry.unbind("<Alt-s>")
+            self.entry.unbind("<Control-s>")
 
             # Construct context
             context = json.dumps(self.chat_history)
@@ -298,7 +299,7 @@ class ChatApp:
                         <CONTEXT>\n{context}\n</CONTEXT>\n
                         <QUESTION>\n{question}\n</QUESTION>\n
                         Assistant:"""
-            # 部分模型不需要 CONTEXT，直接输出 QUESTION
+            # 部分模型不需要 CONTEXT，直接 QUESTION
             if self.modelId.startswith("amazon.titan-embed-text"):
                 prompt = question
 
@@ -307,14 +308,10 @@ class ChatApp:
 
             # Construct bedrock_para
             bedrock_para = json.loads(self.bedrock_para_text.get("1.0", tk.END).strip())
-            if self.modelId.startswith("anthropic.claude"):
-                bedrock_para['prompt'] = prompt
-            elif self.modelId.startswith("amazon.titan"):
+            if self.modelId.startswith("amazon.titan"):
                 bedrock_para['inputText'] = prompt
-            elif self.modelId.startswith("cohere.command"):
-                bedrock_para['prompt'] = prompt
-            elif self.modelId.startswith("ai21.j2"):
-                bedrock_para['prompt'] = prompt
+            else: 
+                bedrock_para['prompt'] = prompt 
 
             invoke_body = json.dumps(bedrock_para)
             # 异步调用Bedrock API
@@ -323,14 +320,6 @@ class ChatApp:
         except Exception as e:
             self.history.insert(tk.END, "Error instruction: " + str(e) + '\n')
         return "break"
-
-    # 清理历史消息，后面的对话将不会考虑Clear之前的历史上下文
-    def clear_history(self):
-        answers = "\n------Clean Conversatioin------\n"
-        self.queue.put(answers)
-        logger.info(answers)
-        self.chat_history = []
-        self.history_num.config(text=f"History: {len(self.chat_history)}")
 
     # 异步调用Bedrock API
     def generate_reply(self, invoke_body):
@@ -346,18 +335,14 @@ class ChatApp:
                                          endpoint_url="https://prod.us-west-2.dataplane.bedrock.aws.dev")
 
             # Invoke streaming model 
-            if self.modelId.startswith("anthropic.claude"):
+            if self.modelId.startswith("anthropic.claude") or self.modelId.startswith("amazon.titan-text"):
                 response = self.client.invoke_model_with_response_stream(body=invoke_body, modelId=self.modelId, accept=accept, contentType=contentType)
-                for event in response['body']:
+                for event in response.get('body'):
                     chunk_str = json.loads(event['chunk']['bytes'].decode('utf-8'))
-                    answer = chunk_str.get('completion')
-                    self.queue.put(answer)
-                    answers += answer
-            if self.modelId.startswith("amazon.titan-text"):
-                response = self.client.invoke_model_with_response_stream(body=invoke_body, modelId=self.modelId, accept=accept, contentType=contentType)
-                for event in response['body']:
-                    chunk_str = json.loads(event['chunk']['bytes'].decode('utf-8'))
-                    answer = chunk_str.get('outputText')
+                    if self.modelId.startswith("anthropic.claude"):
+                        answer = chunk_str.get('completion')
+                    else:  # self.modelId.startswith("amazon.titan-text")
+                        answer = chunk_str.get('outputText')
                     self.queue.put(answer)
                     answers += answer
 
@@ -368,10 +353,6 @@ class ChatApp:
             if self.modelId.startswith("amazon.titan-embed"):
                 answers = json.dumps(response_body.get('embedding'))
                 self.queue.put(answers)
-            # elif self.modelId.startswith("amazon.titan-text"):
-            #     for a in response_body.get('results'):
-            #         answers += a.get('outputText')
-            #     self.queue.put(answers)
             elif self.modelId.startswith("cohere.command-text"):
                 for answer in response_body.get('generations'):
                     answers += answer.get('text')
@@ -381,7 +362,7 @@ class ChatApp:
                     answers += answer.get('data').get('text')
                 self.queue.put(answers)
         except Exception as e:
-            self.queue.put(f"\n\nException Error: {str(e)}\n")
+            self.queue.put(f"\n\nError: {str(e)}\n")
         
         history_record = f"Assistant Answer: {answers}\n---END---\n"
         self.save_history(history_record)
@@ -389,8 +370,16 @@ class ChatApp:
         self.queue.put("\n---END---\n\n")
         self.send_button.config(state=tk.NORMAL)
         self.entry.bind("<Return>", self.send_message)
-        self.entry.bind("<Alt-s>", self.send_message)
+        self.entry.bind("<Control-s>", self.send_message)
         return
+
+    # 清理历史消息，后面的对话将不会考虑Clear之前的历史上下文
+    def clear_history(self, event=None):
+        answers = "\n------Clean Conversatioin------\n"
+        self.queue.put(answers)
+        logger.info(answers)
+        self.chat_history = []
+        self.history_num.config(text=f"History: {len(self.chat_history)}")
 
     # 异步打印Bedrock返回消息
     def check_queue(self):
