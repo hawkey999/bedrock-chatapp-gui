@@ -11,7 +11,7 @@ custom_font_size = 12
 MAX_RETRIES = 3 
 accept = 'application/json'
 contentType = 'application/json'
-default_intruction = "Answer the QUESTION, and consider the previous conversation in CONTEXT, if there is no context or no valuable information in the context, just directly answer the question."
+default_intruction = "You are a AI chat bot to answer the <QUESTION>. You will go through the <CONTEXT> one by one and consider the <CONTEXT> is potentially relevant. Combine the relevant <CONTEXT> to help answering the QUESTION."
 
 def get_regions():
     return ('us-east-1', 'us-west-2', 'ap-southeast-1', 'ap-northeast-1', 'eu-central-1')
@@ -127,7 +127,7 @@ class ChatApp:
         self.root = root
         # self.root.configure(bg='white')
         self.root.title("AWS Bedrock ChatApp(TK GUI) - by James Huang")
-        self.root.geometry('1200x768')
+        self.root.geometry('1024x768')
         # Set the column and row weights
         self.root.grid_columnconfigure(0, weight=4)
         self.root.grid_columnconfigure(1, weight=1)
@@ -240,10 +240,12 @@ class ChatApp:
 
         self.send_button = Button(button_frame, text="SEND", command=self.send_message, underline=0, width=8)
         self.send_button.grid(row=0, column=0, sticky='ew')
-        self.clear_button = Button(button_frame, text="CLEAR", command=self.clear_history, underline=1, width=8)
+        self.clean_button = Button(button_frame, text="CLEAN SCRN.", command=self.clean_screen, width=8)
+        self.clean_button.grid(row=0, column=1, sticky='ew')
+        self.clear_button = Button(button_frame, text="CLEAR CONV.", command=self.clear_history, underline=1, width=8)
         self.clear_button.grid(row=1, column=0, sticky='ew')
         self.history_num = Label(button_frame, text="History: 0")
-        self.history_num.grid(row=1, column=2, sticky='ew')
+        self.history_num.grid(row=1, column=1, sticky='ew')
 
         self.change_profile_region()
         self.change_modelId()
@@ -273,8 +275,20 @@ class ChatApp:
         self.chat_history.append(history_record)
         self.history_num.config(text=f"History: {len(self.chat_history)}")
 
+    def clean_screen(self, event=None):
+        self.history.delete("1.0", tk.END)
+        self.clear_history()
+
     def just_enter(self, event=None):
         return
+
+    # 清理历史消息，后面的对话将不会考虑Clear之前的历史上下文
+    def clear_history(self, event=None):
+        answers = "\n------Clear Conversatioin------\n"
+        self.queue.put(answers)
+        logger.info(answers)
+        self.chat_history = []
+        self.history_num.config(text=f"History: {len(self.chat_history)}")
 
     # 发送消息按钮
     def send_message(self, event=None):
@@ -298,7 +312,7 @@ class ChatApp:
             prompt = f"""\n\nHuman: "{instruction}"\n
                         <CONTEXT>\n{context}\n</CONTEXT>\n
                         <QUESTION>\n{question}\n</QUESTION>\n
-                        Assistant:"""
+                        \nAssistant:"""
             # 部分模型不需要 CONTEXT，直接 QUESTION
             if self.modelId.startswith("amazon.titan-embed-text"):
                 prompt = question
@@ -372,14 +386,6 @@ class ChatApp:
         self.entry.bind("<Return>", self.send_message)
         self.entry.bind("<Control-s>", self.send_message)
         return
-
-    # 清理历史消息，后面的对话将不会考虑Clear之前的历史上下文
-    def clear_history(self, event=None):
-        answers = "\n------Clean Conversatioin------\n"
-        self.queue.put(answers)
-        logger.info(answers)
-        self.chat_history = []
-        self.history_num.config(text=f"History: {len(self.chat_history)}")
 
     # 异步打印Bedrock返回消息
     def check_queue(self):
