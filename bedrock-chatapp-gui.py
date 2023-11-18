@@ -11,13 +11,13 @@ custom_font_size = 12
 MAX_RETRIES = 3 
 accept = 'application/json'
 contentType = 'application/json'
-default_intruction = "You are a AI chat bot to answer the <QUESTION>. You will go through the <CONTEXT> one by one and consider the <CONTEXT> is potentially relevant. Combine the relevant <CONTEXT> to help answering the QUESTION."
+default_intruction = "You are a AI chat bot to answer the <QUESTION>. You will go through the <CONTEXT> one by one and consider the <CONTEXT> is potentially relevant. Combine the relevant <CONTEXT> to help answering the QUESTION. If there is no context or no valuable context, then just directly answer the quesiton. If you don't know the answer, just say you don't know."
 
 def get_regions():
     return ('us-east-1', 'us-west-2', 'ap-southeast-1', 'ap-northeast-1', 'eu-central-1')
 
 def get_modelIds():
-    return ('anthropic.claude-v2', 'anthropic.claude-instant-v1', 'anthropic.claude-v1', 'amazon.titan-embed-text-v1', 'amazon.titan-text-express-v1', 'amazon.titan-text-lite-v1', 'amazon.titan-text-agile-v1', 'cohere.command-text-v14', 'ai21.j2-mid-v1', 'ai21.j2-ultra-v1')
+    return ('anthropic.claude-v2', 'anthropic.claude-instant-v1', 'anthropic.claude-v1', 'meta.llama2-13b-chat-v1', 'amazon.titan-embed-text-v1', 'amazon.titan-text-express-v1', 'amazon.titan-text-lite-v1', 'amazon.titan-text-agile-v1', 'cohere.command-text-v14', 'cohere.command-light-text-v14', 'cohere.embed-english-v3', 'cohere.embed-multilingual-v3', 'ai21.j2-mid-v1', 'ai21.j2-ultra-v1')
 
 def get_endpoints():
     return ('default', 'internal')
@@ -72,6 +72,16 @@ default_para = {                            # 可以在运行之后的界面上�
         "max_tokens": 2048,
         "temperature": 0.5
     },
+    "cohere.command-light-text-v14": {
+        "max_tokens": 2048,
+        "temperature": 0.5
+    },
+    "cohere.embed-english-v3": {
+        "input_type": 'search_document',
+    },
+    "cohere.embed-multilingual-v3": {
+        "input_type": 'search_document',
+    },
     "ai21.j2-mid-v1": {
         "maxTokens": 8191,
         "temperature": 0.5,
@@ -87,6 +97,11 @@ default_para = {                            # 可以在运行之后的界面上�
         "countPenalty": {"scale": 0},
         "presencePenalty": {"scale": 0},
         "frequencyPenalty": {"scale": 0}
+    },
+    "meta.llama2-13b-chat-v1": {
+        "max_gen_len": 128,
+        "temperature": 0.1,
+        "top_p": 0.9,
     },
 }
 
@@ -126,7 +141,7 @@ class ChatApp:
     def __init__(self, root):
         self.root = root
         # self.root.configure(bg='white')
-        self.root.title("AWS Bedrock ChatApp(TK GUI) - by James Huang")
+        self.root.title("AWS Bedrock ChatApp - by James Huang")
         self.root.geometry('1024x768')
         # Set the column and row weights
         self.root.grid_columnconfigure(0, weight=4)
@@ -251,7 +266,7 @@ class ChatApp:
         self.change_modelId()
         self.chat_history = []
         self.queue = queue.Queue()
-        self.root.after(200, self.check_queue)
+        self.root.after(1000, self.check_queue)
 
     def change_profile_region(self, event=None):
         self.profile = self.profile_var.get()
@@ -314,7 +329,8 @@ class ChatApp:
                         <QUESTION>\n{question}\n</QUESTION>\n
                         \nAssistant:"""
             # 部分模型不需要 CONTEXT，直接 QUESTION
-            if self.modelId.startswith("amazon.titan-embed-text"):
+            if self.modelId.startswith("amazon.titan-embed") or \
+                self.modelId.startswith("cohere.embed"):
                 prompt = question
 
             self.history.insert(tk.END, f"Bot({self.modelId}): ")
@@ -324,6 +340,8 @@ class ChatApp:
             bedrock_para = json.loads(self.bedrock_para_text.get("1.0", tk.END).strip())
             if self.modelId.startswith("amazon.titan"):
                 bedrock_para['inputText'] = prompt
+            if self.modelId.startswith("cohere.embed"):
+                bedrock_para['texts'] = [prompt]
             else: 
                 bedrock_para['prompt'] = prompt 
 
@@ -349,14 +367,19 @@ class ChatApp:
                                          endpoint_url="https://prod.us-west-2.dataplane.bedrock.aws.dev")
 
             # Invoke streaming model 
-            if self.modelId.startswith("anthropic.claude") or self.modelId.startswith("amazon.titan-text"):
+            if self.modelId.startswith("anthropic.claude") or self.modelId.startswith("amazon.titan-text") or self.modelId.startswith("meta.llama2-13b-chat"):
                 response = self.client.invoke_model_with_response_stream(body=invoke_body, modelId=self.modelId, accept=accept, contentType=contentType)
                 for event in response.get('body'):
                     chunk_str = json.loads(event['chunk']['bytes'].decode('utf-8'))
+
                     if self.modelId.startswith("anthropic.claude"):
                         answer = chunk_str.get('completion')
-                    else:  # self.modelId.startswith("amazon.titan-text")
+                    elif self.modelId.startswith("amazon.titan-text"):
                         answer = chunk_str.get('outputText')
+                    elif self.modelId.startswith("meta.llama2-13b-chat"):
+                        answer = chunk_str.get('generation')
+                    else:
+                        answer = chunk_str
                     self.queue.put(answer)
                     answers += answer
 
@@ -364,10 +387,11 @@ class ChatApp:
             else:
                 response = self.client.invoke_model(body=invoke_body, modelId=self.modelId, accept=accept, contentType=contentType)
                 response_body = json.loads(response.get('body').read())
+
             if self.modelId.startswith("amazon.titan-embed"):
                 answers = json.dumps(response_body.get('embedding'))
                 self.queue.put(answers)
-            elif self.modelId.startswith("cohere.command-text"):
+            elif self.modelId.startswith("cohere.command"):
                 for answer in response_body.get('generations'):
                     answers += answer.get('text')
                 self.queue.put(answers)
@@ -375,6 +399,12 @@ class ChatApp:
                 for answer in response_body.get('completions'):
                     answers += answer.get('data').get('text')
                 self.queue.put(answers)
+            elif self.modelId.startswith("cohere.embed"):
+                answers = json.dumps(response_body.get('embeddings'))
+                self.queue.put(answers)
+            # else:
+            #     answers = response_body
+            #     self.queue.put(answers)
         except Exception as e:
             self.queue.put(f"\n\nError: {str(e)}\n")
         
@@ -393,7 +423,7 @@ class ChatApp:
             answer = self.queue.get()
             self.history.insert(tk.END, answer)
             self.history.see(tk.END)
-        self.root.after(200, self.check_queue)
+        self.root.after(1000, self.check_queue)
 
 
 # Main
