@@ -1,9 +1,14 @@
 import boto3, botocore, json, os, logging
 import tkinter as tk
-from tkinter import ttk, Label, Scrollbar, Text, Button, font
+from tkinter import ttk, Label, Scrollbar, Text, Button, font, filedialog
+from PIL import Image, ImageTk
 import threading
 import queue
 import configparser
+import base64
+import mimetypes
+from PIL import Image
+import os
 os.environ['OS_ACTIVITY_DT_MODE'] = 'disable' 
 
 # default values
@@ -11,103 +16,32 @@ custom_font_size = 12
 MAX_RETRIES = 3 
 accept = 'application/json'
 contentType = 'application/json'
-default_intruction = "You are a AI chat bot to answer the <QUESTION>. You will go through the <CONTEXT> one by one and consider the <CONTEXT> is potentially relevant. Combine the relevant <CONTEXT> to help answering the QUESTION. If there is no context or no valuable context, then just directly answer the quesiton. If you don't know the answer, just say you don't know."
+default_intruction = "You are a AI chat bot."
 
 def get_regions():
     return ('us-east-1', 'us-west-2', 'ap-southeast-1', 'ap-northeast-1', 'eu-central-1')
 
 def get_modelIds():
-    return ('anthropic.claude-v2', 'anthropic.claude-instant-v1', 'anthropic.claude-v1', 'meta.llama2-13b-chat-v1', 'amazon.titan-embed-text-v1', 'amazon.titan-text-express-v1', 'amazon.titan-text-lite-v1', 'amazon.titan-text-agile-v1', 'cohere.command-text-v14', 'cohere.command-light-text-v14', 'cohere.embed-english-v3', 'cohere.embed-multilingual-v3', 'ai21.j2-mid-v1', 'ai21.j2-ultra-v1')
+    return ('anthropic.claude-3-sonnet-20240229-v1:0', '')
 
 def get_endpoints():
     return ('default', 'internal')
 
 default_para = {                            # 可以在运行之后的界面上修改
-    "anthropic.claude-v2": {
-        "max_tokens_to_sample": 8191,   # 最大输出的Token数量是8K，最大输入不需要填写，Claude默认100K
-        "temperature": 0.5,                 # Use a lower value to decrease randomness in the response. Claude 0-1, default 0.5
-        "top_k": 250,                       # Use a lower value to ignore less probable options.  Claude 0-500, default 250
-        "top_p": 1,                         # Specify the number of token choices the model uses to generate the next token. Claude 0-1, default 1
-        "stop_sequences": ["\\n\\nHuman:"],
-        },    
-    "anthropic.claude-instant-v1": {
-        "max_tokens_to_sample": 8191, 
-        "temperature": 0.5,
-        "top_k": 250,
-        "top_p": 1,
+    "anthropic.claude-3-sonnet-20240229-v1:0": {
+        "anthropic_version": "bedrock-2023-05-31",
+        "max_tokens": 8191,
+        "temperature": 0.5, # Use a lower value to decrease randomness in the response. Claude 0-1, default 0.5
+        "top_k": 250,       # Use a lower value to ignore less probable options.  Claude 0-500, default 250
+        "top_p": 1,         # Specify the number of token choices the model uses to generate the next token. Claude 0-1, default 1
+        "stop_sequences": ["end_turn"],
         },
-    "anthropic.claude-v1": {
-        "max_tokens_to_sample": 8191, 
-        "temperature": 0.5,
-        "top_k": 250,
-        "top_p": 1,
-        },
-    "amazon.titan-embed-text-v1": {
-    },
-    "amazon.titan-text-express-v1": {
-        "textGenerationConfig": {
-            "maxTokenCount": 4096,
-            "stopSequences": [],
-            "temperature":0.5,
-            "topP":1
-        }
-    },
-    "amazon.titan-text-lite-v1": {
-        "textGenerationConfig": {
-            "maxTokenCount": 4096,
-            "stopSequences": [],
-            "temperature":0.5,
-            "topP":1
-        }
-    },
-    "amazon.titan-text-agile-v1": {
-        "textGenerationConfig": {
-            "maxTokenCount": 4096,
-            "stopSequences": [],
-            "temperature":0.5,
-            "topP":1
-        }
-    },
-    "cohere.command-text-v14": {
-        "max_tokens": 2048,
-        "temperature": 0.5
-    },
-    "cohere.command-light-text-v14": {
-        "max_tokens": 2048,
-        "temperature": 0.5
-    },
-    "cohere.embed-english-v3": {
-        "input_type": 'search_document',
-    },
-    "cohere.embed-multilingual-v3": {
-        "input_type": 'search_document',
-    },
-    "ai21.j2-mid-v1": {
-        "maxTokens": 8191,
-        "temperature": 0.5,
-        "topP": 1,
-        "countPenalty": {"scale": 0},
-        "presencePenalty": {"scale": 0},
-        "frequencyPenalty": {"scale": 0}
-    },
-    "ai21.j2-ultra-v1": {
-        "maxTokens": 8191,
-        "temperature": 0.5,
-        "topP": 1,
-        "countPenalty": {"scale": 0},
-        "presencePenalty": {"scale": 0},
-        "frequencyPenalty": {"scale": 0}
-    },
-    "meta.llama2-13b-chat-v1": {
-        "max_gen_len": 128,
-        "temperature": 0.1,
-        "top_p": 0.9,
-    },
 }
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
-file_handler = logging.FileHandler('./bedrock_chatapp_history.log', encoding='utf8')
+logpath='./bedrock_chatapp_history.log'
+file_handler = logging.FileHandler(logpath, encoding='utf8')
 file_handler.setLevel(logging.INFO)
 formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s', datefmt='%Y%m%d %H:%M:%S')
 file_handler.setFormatter(formatter)
@@ -141,8 +75,9 @@ class ChatApp:
     def __init__(self, root):
         self.root = root
         # self.root.configure(bg='white')
-        self.root.title("AWS Bedrock ChatApp - by James Huang")
-        self.root.geometry('1024x768')
+        title_text = f"AWS Bedrock ChatApp by James Huang, chat log in:{os.path.abspath(logpath)}"
+        self.root.title(title_text)
+        self.root.geometry('1200x768')
         # Set the column and row weights
         self.root.grid_columnconfigure(0, weight=4)
         self.root.grid_columnconfigure(1, weight=1)
@@ -183,7 +118,7 @@ class ChatApp:
         modelIds = get_modelIds()
         self.modelId_var = tk.StringVar()
         self.modelId_var.set(modelIds[0] if modelIds else "No ModelId Found")
-        self.modelId_menu = ttk.Combobox(selector_frame, width=20, textvariable=self.modelId_var, values=modelIds)
+        self.modelId_menu = ttk.Combobox(selector_frame, width=30, textvariable=self.modelId_var, values=modelIds)
         self.modelId_menu.pack(side=tk.LEFT)
         self.modelId_menu.bind("<<ComboboxSelected>>", self.change_modelId)
 
@@ -239,8 +174,10 @@ class ChatApp:
         input_frame.grid_columnconfigure(0, weight=1)
         input_frame.grid_rowconfigure(0, weight=0)
 
-        self.entry = Text(input_frame, height=4, font=custom_font)
-        self.entry.pack(fill=tk.X, expand=True, side=tk.LEFT)
+        self.entry_label = tk.Label(input_frame, text="INPUT: ")
+        self.entry_label.grid(row=1, column=0, sticky="e")
+        self.entry = Text(input_frame, height=4, width=112, font=custom_font)
+        self.entry.grid(row=1, column=1, sticky="nsew")
         self.entry.focus_set()
         self.entry.bind("<Return>", self.send_message)
         self.entry.bind("<Control-s>", self.send_message)
@@ -248,17 +185,22 @@ class ChatApp:
         self.entry.bind("<Command-Return>", self.just_enter)
         self.entry.bind("<Control-l>", self.clear_history)
 
+        self.url_label = tk.Label(input_frame, text="IMAGE: ")
+        self.url_label.grid(row=0, column=0, sticky="e")
+        self.url_txt = ttk.Entry(input_frame)
+        self.url_txt.grid(row=0, column=1, sticky="nsew")
+
         button_frame = tk.Frame(root)
         button_frame.grid(row=2, column=1, padx=5, pady=5, sticky='ew')
         button_frame.grid_columnconfigure(0, weight=0)
         button_frame.grid_rowconfigure(0, weight=1)
 
-        self.send_button = Button(button_frame, text="SEND", command=self.send_message, underline=0, width=8)
-        self.send_button.grid(row=0, column=0, sticky='ew')
-        self.clean_button = Button(button_frame, text="CLEAN SCRN.", command=self.clean_screen, width=8)
+        self.browser_button = Button(button_frame, text="IMAGE", command=self.browse_file, width=8, height=2)
+        self.browser_button.grid(row=0, column=0, sticky='ew')
+        self.send_button = Button(button_frame, text="SEND", command=self.send_message, underline=0, width=8, height=2)
+        self.send_button.grid(row=1, column=0, sticky='ew')
+        self.clean_button = Button(button_frame, text="CLEAR HIS.", command=self.clean_screen, width=8, height=2)
         self.clean_button.grid(row=0, column=1, sticky='ew')
-        self.clear_button = Button(button_frame, text="CLEAR CONV.", command=self.clear_history, underline=1, width=8)
-        self.clear_button.grid(row=1, column=0, sticky='ew')
         self.history_num = Label(button_frame, text="History: 0")
         self.history_num.grid(row=1, column=1, sticky='ew')
 
@@ -314,36 +256,48 @@ class ChatApp:
             self.entry.unbind("<Control-s>")
 
             # Construct context
-            context = json.dumps(self.chat_history)
             question = self.entry.get("1.0", tk.END).strip()
-            self.history.insert(tk.END, "You: " + question + '\n\n')
+            self.history.insert(tk.END, "User: " + question + '\n\n')
             self.history.see(tk.END)
-            history_record = f"Human QUESTION: {question}\n"
-            self.save_history(history_record)
-            logger.info(history_record)
 
-            # 这里修改默认的 Promot 模版
-            instruction = self.instruction_text.get("1.0", tk.END).strip()
-            prompt = f"""\n\nHuman: "{instruction}"\n
-                        <CONTEXT>\n{context}\n</CONTEXT>\n
-                        <QUESTION>\n{question}\n</QUESTION>\n
-                        \nAssistant:"""
-            # 部分模型不需要 CONTEXT，直接 QUESTION
-            if self.modelId.startswith("amazon.titan-embed") or \
-                self.modelId.startswith("cohere.embed"):
-                prompt = question
+            # 多模态上传文件
+            file=self.url_txt.get()
+            if file:
+                mime_type = mimetypes.guess_type(file)[0]
+                print("mime_type:", mime_type)
+                with open(file, 'rb') as f:
+                    encoded_string = base64.b64encode(f.read())
+                user_message = {"role": "user", "content": [
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": mime_type,
+                            "data": encoded_string.decode('utf-8')
+                        }},
+                    {
+                        "type": "text",
+                        "text": question
+                    }
+                    ]}
+                self.url_txt.delete(0, tk.END)
 
+            # 纯文本交互
+            else:
+                user_message = {"role": "user", "content": question}
+
+            self.save_history(user_message)
+            logger.info(json.dumps(user_message, ensure_ascii=False))
+            system_prompt = self.instruction_text.get("1.0", tk.END).strip()
+            prompt = self.chat_history
             self.history.insert(tk.END, f"Bot({self.modelId}): ")
             self.history.see(tk.END)
 
             # Construct bedrock_para
             bedrock_para = json.loads(self.bedrock_para_text.get("1.0", tk.END).strip())
-            if self.modelId.startswith("amazon.titan"):
-                bedrock_para['inputText'] = prompt
-            if self.modelId.startswith("cohere.embed"):
-                bedrock_para['texts'] = [prompt]
-            else: 
-                bedrock_para['prompt'] = prompt 
+            if self.modelId.startswith("anthropic.claude-3"):
+                bedrock_para['messages'] = prompt
+                bedrock_para['system'] = system_prompt
 
             invoke_body = json.dumps(bedrock_para)
             # 异步调用Bedrock API
@@ -367,50 +321,29 @@ class ChatApp:
                                          endpoint_url="https://prod.us-west-2.dataplane.bedrock.aws.dev")
 
             # Invoke streaming model 
-            if self.modelId.startswith("anthropic.claude") or self.modelId.startswith("amazon.titan-text") or self.modelId.startswith("meta.llama2-13b-chat"):
+            if self.modelId.startswith("anthropic.claude"):
                 response = self.client.invoke_model_with_response_stream(body=invoke_body, modelId=self.modelId, accept=accept, contentType=contentType)
                 for event in response.get('body'):
                     chunk_str = json.loads(event['chunk']['bytes'].decode('utf-8'))
-
-                    if self.modelId.startswith("anthropic.claude"):
-                        answer = chunk_str.get('completion')
-                    elif self.modelId.startswith("amazon.titan-text"):
-                        answer = chunk_str.get('outputText')
-                    elif self.modelId.startswith("meta.llama2-13b-chat"):
-                        answer = chunk_str.get('generation')
-                    else:
-                        answer = chunk_str
+                    answer = ""
+                    if chunk_str['type'] == "message_start":
+                        answer = json.dumps(chunk_str['message']['usage'])+"\n******\n"
+                    elif chunk_str['type'] == "content_block_delta":
+                        if chunk_str['delta']['type'] == 'text_delta':
+                            answer = chunk_str['delta']['text']
+                    elif chunk_str['type'] == "message_delta":
+                        answer=f"""\n******\nStop reason: {chunk_str['delta']['stop_reason']}; Stop sequence: {chunk_str['delta']['stop_sequence']}; Output tokens: {chunk_str['usage']['output_tokens']}"""
+                    elif chunk_str['type'] == "error":
+                        answer=json.dumps(chunk_str)
                     self.queue.put(answer)
                     answers += answer
 
-            # Invoke non-streaming model
-            else:
-                response = self.client.invoke_model(body=invoke_body, modelId=self.modelId, accept=accept, contentType=contentType)
-                response_body = json.loads(response.get('body').read())
-
-            if self.modelId.startswith("amazon.titan-embed"):
-                answers = json.dumps(response_body.get('embedding'))
-                self.queue.put(answers)
-            elif self.modelId.startswith("cohere.command"):
-                for answer in response_body.get('generations'):
-                    answers += answer.get('text')
-                self.queue.put(answers)
-            elif self.modelId.startswith("ai21.j2"):
-                for answer in response_body.get('completions'):
-                    answers += answer.get('data').get('text')
-                self.queue.put(answers)
-            elif self.modelId.startswith("cohere.embed"):
-                answers = json.dumps(response_body.get('embeddings'))
-                self.queue.put(answers)
-            # else:
-            #     answers = response_body
-            #     self.queue.put(answers)
         except Exception as e:
             self.queue.put(f"\n\nError: {str(e)}\n")
         
-        history_record = f"Assistant Answer: {answers}\n---END---\n"
+        history_record = {"role": "assistant", "content": answers}
         self.save_history(history_record)
-        logger.info(history_record)
+        logger.info(json.dumps(history_record, ensure_ascii=False))
         self.queue.put("\n---END---\n\n")
         self.send_button.config(state=tk.NORMAL)
         self.entry.bind("<Return>", self.send_message)
@@ -424,6 +357,23 @@ class ChatApp:
             self.history.insert(tk.END, answer)
             self.history.see(tk.END)
         self.root.after(1000, self.check_queue)
+    
+    # Click Select File
+    def browse_file(self):
+        local_file = filedialog.askopenfilename()
+        self.url_txt.delete(0, tk.END)
+        self.url_txt.insert(0, local_file)
+        file_name = os.path.basename(local_file)
+        image = Image.open(local_file)
+
+        width, height = image.size
+        if width > 500:
+            image = image.resize((500, int(height * 500 / width)))
+
+        photo = ImageTk.PhotoImage(image)
+        self.history.image_create(tk.END, image=photo)
+        self.history.image = photo
+        self.history.insert(tk.END, f"\nImage: {file_name}, Resolution: {width}x{height}\n")
 
 
 # Main
