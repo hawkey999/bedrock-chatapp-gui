@@ -16,7 +16,7 @@ custom_font_size = 12
 MAX_RETRIES = 3 
 accept = 'application/json'
 contentType = 'application/json'
-default_intruction = "You are a AI chat bot."
+default_intruction = "You are AI chat bot."
 
 def get_regions():
     return ('us-east-1', 'us-west-2', 'ap-southeast-1', 'ap-northeast-1', 'eu-central-1')
@@ -77,7 +77,7 @@ class ChatApp:
         # self.root.configure(bg='white')
         title_text = f"AWS Bedrock ChatApp by James Huang, chat log in:{os.path.abspath(logpath)}"
         self.root.title(title_text)
-        self.root.geometry('1200x768')
+        self.root.geometry('1100x700')
         # Set the column and row weights
         self.root.grid_columnconfigure(0, weight=4)
         self.root.grid_columnconfigure(1, weight=1)
@@ -145,6 +145,7 @@ class ChatApp:
 
         self.history = Text(history_frame, font=custom_font, yscrollcommand=self.scrollbar.set)
         self.history.pack(fill=tk.BOTH, expand=True)
+        self.history.images = []
 
         self.scrollbar.config(command=self.history.yview)
         
@@ -176,7 +177,7 @@ class ChatApp:
 
         self.entry_label = tk.Label(input_frame, text="INPUT: ")
         self.entry_label.grid(row=1, column=0, sticky="e")
-        self.entry = Text(input_frame, height=4, width=112, font=custom_font)
+        self.entry = Text(input_frame, height=4, width=100, font=custom_font)
         self.entry.grid(row=1, column=1, sticky="nsew")
         self.entry.focus_set()
         self.entry.bind("<Return>", self.send_message)
@@ -235,6 +236,7 @@ class ChatApp:
     def clean_screen(self, event=None):
         self.history.delete("1.0", tk.END)
         self.clear_history()
+        self.url_txt.delete(0, tk.END)
 
     def just_enter(self, event=None):
         return
@@ -372,7 +374,7 @@ class ChatApp:
 
         photo = ImageTk.PhotoImage(image)
         self.history.image_create(tk.END, image=photo)
-        self.history.image = photo
+        self.history.images.append(photo)
         self.history.insert(tk.END, f"\nImage: {file_name}, Resolution: {width}x{height}\n")
 
 
