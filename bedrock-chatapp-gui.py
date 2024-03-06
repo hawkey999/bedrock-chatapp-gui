@@ -176,20 +176,15 @@ class ChatApp:
         input_frame.grid_rowconfigure(0, weight=0)
 
         self.entry_label = tk.Label(input_frame, text="INPUT: ")
-        self.entry_label.grid(row=1, column=0, sticky="e")
-        self.entry = Text(input_frame, height=4, width=100, font=custom_font)
-        self.entry.grid(row=1, column=1, sticky="nsew")
+        self.entry_label.grid(row=0, column=0, sticky="w")
+        self.entry = Text(input_frame, height=4, font=custom_font)
+        self.entry.grid(row=1, column=0, sticky="nsew")
         self.entry.focus_set()
         self.entry.bind("<Return>", self.send_message)
         self.entry.bind("<Control-s>", self.send_message)
         self.entry.bind("<Shift-Return>", self.just_enter)
         self.entry.bind("<Command-Return>", self.just_enter)
         self.entry.bind("<Control-l>", self.clear_history)
-
-        # self.url_label = tk.Label(input_frame, text="IMAGE: ")
-        # self.url_label.grid(row=0, column=0, sticky="e")
-        # self.url_txt = ttk.Entry(input_frame)
-        # self.url_txt.grid(row=0, column=1, sticky="nsew")
 
         button_frame = tk.Frame(root)
         button_frame.grid(row=2, column=1, padx=5, pady=5, sticky='ew')
