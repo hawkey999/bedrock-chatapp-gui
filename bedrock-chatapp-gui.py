@@ -16,7 +16,7 @@ custom_font_size = 12
 MAX_RETRIES = 3 
 accept = 'application/json'
 contentType = 'application/json'
-default_intruction = "You are AI chat bot."
+default_intruction = "你是一个用中文回答问题的AI机器人"
 
 def get_regions():
     return ('us-east-1', 'us-west-2', 'ap-southeast-1', 'ap-northeast-1', 'eu-central-1')
@@ -186,10 +186,10 @@ class ChatApp:
         self.entry.bind("<Command-Return>", self.just_enter)
         self.entry.bind("<Control-l>", self.clear_history)
 
-        self.url_label = tk.Label(input_frame, text="IMAGE: ")
-        self.url_label.grid(row=0, column=0, sticky="e")
-        self.url_txt = ttk.Entry(input_frame)
-        self.url_txt.grid(row=0, column=1, sticky="nsew")
+        # self.url_label = tk.Label(input_frame, text="IMAGE: ")
+        # self.url_label.grid(row=0, column=0, sticky="e")
+        # self.url_txt = ttk.Entry(input_frame)
+        # self.url_txt.grid(row=0, column=1, sticky="nsew")
 
         button_frame = tk.Frame(root)
         button_frame.grid(row=2, column=1, padx=5, pady=5, sticky='ew')
@@ -208,6 +208,7 @@ class ChatApp:
         self.change_profile_region()
         self.change_modelId()
         self.chat_history = []
+        self.file_content = []
         self.queue = queue.Queue()
         self.root.after(1000, self.check_queue)
 
@@ -236,7 +237,7 @@ class ChatApp:
     def clean_screen(self, event=None):
         self.history.delete("1.0", tk.END)
         self.clear_history()
-        self.url_txt.delete(0, tk.END)
+        # self.url_txt.delete(0, tk.END)
 
     def just_enter(self, event=None):
         return
@@ -263,26 +264,13 @@ class ChatApp:
             self.history.see(tk.END)
 
             # 多模态上传文件
-            file=self.url_txt.get()
-            if file:
-                mime_type = mimetypes.guess_type(file)[0]
-                print("mime_type:", mime_type)
-                with open(file, 'rb') as f:
-                    encoded_string = base64.b64encode(f.read())
-                user_message = {"role": "user", "content": [
-                    {
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": mime_type,
-                            "data": encoded_string.decode('utf-8')
-                        }},
-                    {
+            if self.file_content:
+                self.file_content.append({
                         "type": "text",
                         "text": question
-                    }
-                    ]}
-                self.url_txt.delete(0, tk.END)
+                    })
+                user_message = {"role": "user", "content": self.file_content}
+                self.file_content = []  # 清空上传文件的内容
 
             # 纯文本交互
             else:
@@ -363,8 +351,8 @@ class ChatApp:
     # Click Select File
     def browse_file(self):
         local_file = filedialog.askopenfilename()
-        self.url_txt.delete(0, tk.END)
-        self.url_txt.insert(0, local_file)
+        # self.url_txt.delete(0, tk.END)
+        # self.url_txt.insert(0, local_file)
         file_name = os.path.basename(local_file)
         image = Image.open(local_file)
 
@@ -377,6 +365,16 @@ class ChatApp:
         self.history.images.append(photo)
         self.history.insert(tk.END, f"\nImage: {file_name}, Resolution: {width}x{height}\n")
 
+        mime_type = mimetypes.guess_type(local_file)[0]
+        with open(local_file, 'rb') as f:
+            encoded_string = base64.b64encode(f.read())
+        self.file_content.append({
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": mime_type,
+                            "data": encoded_string.decode('utf-8')
+                        }})
 
 # Main
 if __name__ == '__main__':
