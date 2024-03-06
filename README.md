@@ -27,10 +27,6 @@ git clone https://github.com/hawkey999/bedrock-chatapp-gui
 python3 bedrock-chatapp-gui/bedrock-chatapp-gui.py
 ```
 
-* Windows  
-
-可以按上面步骤使用 python ，也可以到[这里](https://github.com/hawkey999/bedrock-chatapp-gui/releases)直接下载打包好的 .exe 文件运行
-
 * IAM
 
 如果以前没有用过 AWS CLI （命令行），则需要在 AWS IAM 中创建一个用户，然后把 Access Key 和 Secret Key 配置到本地的 AWS Profile 中，具体步骤可以参考[创建IAM User](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_users_create.html#id_users_create_console)。注意，这个 IAM 用户需要有 Bedrock 的权限。首次运行本程序的时候，会提示你输入 Access Key 和 Secret Key ，以及所在的 Region，然后会自动创建一个本地的 AWS Profile。  
