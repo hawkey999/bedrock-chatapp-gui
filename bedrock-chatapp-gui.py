@@ -7,14 +7,16 @@ import queue
 import configparser
 import base64
 import mimetypes
-from PIL import Image
 import os
+from io import BytesIO
 os.environ['OS_ACTIVITY_DT_MODE'] = 'disable' 
 
 
 # default values
 custom_font_size = 12
 MAX_RETRIES = 3 
+MAX_SIZE_IN_MB = 5
+max_size = MAX_SIZE_IN_MB * 1024 * 1024  # 5MB 转换为字节
 accept = 'application/json'
 contentType = 'application/json'
 default_intruction = {"default": "你是一个用中文回答问题的AI机器人，你会一步步地思考"}
@@ -261,6 +263,7 @@ class ChatApp:
     # 清理历史消息，后面的对话将不会考虑Clear之前的历史上下文
     def clear_history(self, event=None):
         answers = "\n------Clear Conversatioin------\n\n"
+        self.file_content = []
         self.queue.put(answers)
         logger.info(answers)
         self.chat_history = []
@@ -373,23 +376,37 @@ class ChatApp:
     # Click Select File
     def browse_file(self):
         local_file = filedialog.askopenfilename()
-        # self.url_txt.delete(0, tk.END)
-        # self.url_txt.insert(0, local_file)
         file_name = os.path.basename(local_file)
+        mime_type = mimetypes.guess_type(local_file)[0]            
         image = Image.open(local_file)
-
+        save_format = image.format
         width, height = image.size
-        if width > 500:
-            image = image.resize((500, int(height * 500 / width)))
 
-        photo = ImageTk.PhotoImage(image)
-        self.history.image_create(tk.END, image=photo)
-        self.history.images.append(photo)
-        self.history.insert(tk.END, f"\nImage: {file_name}, Resolution: {width}x{height}\n")
+        if width > 1920 or height > 1920:
+            max_dim = max(width, height)
+            ratio = 1920 / max_dim
+            width = int(width * ratio)
+            height = int(height * ratio)
+            image = image.resize((width, height))
+        # 将缩小后的图像保存在内存中，试算一下图片大小
+        buffer = BytesIO()
+        image.save(buffer, format=save_format)
+        image_bytes = buffer.getvalue()
+        buffer.close()
 
-        mime_type = mimetypes.guess_type(local_file)[0]
-        with open(local_file, 'rb') as f:
-            encoded_string = base64.b64encode(f.read())
+        # 如果图片大小大于 5MB,则缩小图片，否则Bedrock不接受
+        image_size = len(image_bytes)
+        if image_size > max_size:
+            ratio = (max_size / image_size) ** 0.5
+            width = int(width * ratio)
+            height = int(height * ratio)
+            image = image.resize((width, height))
+            buffer = BytesIO()
+            image.save(buffer, format=save_format)
+            image_bytes = buffer.getvalue()
+            buffer.close()
+
+        encoded_string = base64.b64encode(image_bytes)
         self.file_content.append({
                         "type": "image",
                         "source": {
@@ -397,6 +414,15 @@ class ChatApp:
                             "media_type": mime_type,
                             "data": encoded_string.decode('utf-8')
                         }})
+
+        # 改变"显示"的分辨率大小为500以内
+        if width > 512:
+            image = image.resize((512, int(height * 512 / width)))
+        photo = ImageTk.PhotoImage(image)
+        self.history.image_create(tk.END, image=photo)
+        self.history.images.append(photo)
+        self.history.insert(tk.END, f"\nImage: {file_name}, Resolution: {width}x{height}\n")
+
     
     # Save System Prompt
     def save_sys_prompt(self):
