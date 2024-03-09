@@ -20,7 +20,7 @@ max_size = MAX_SIZE_IN_MB * 1024 * 1024  # 5MB 转换为字节
 accept = 'application/json'
 contentType = 'application/json'
 default_intruction = {"default": "你是一个用中文回答问题的AI机器人，你会一步步地思考"}
-sys_prompt_path = os.path.join(os.getcwd(), "bedrock-chatbot-prompt.json")
+sys_prompt_path = os.path.join(os.getcwd(), "bedrock_chatapp_prompt.json")
 try:
     with open(sys_prompt_path, 'r', encoding="utf-8") as f:
         sys_prompt_dict = json.load(f)
