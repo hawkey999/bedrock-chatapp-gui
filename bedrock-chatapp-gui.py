@@ -13,7 +13,7 @@ os.environ['OS_ACTIVITY_DT_MODE'] = 'disable'
 
 
 # default values
-custom_font_size = 12
+custom_font_size = 14
 MAX_RETRIES = 3 
 MAX_SIZE_IN_MB = 5
 max_size = MAX_SIZE_IN_MB * 1024 * 1024  # 5MB 转换为字节
@@ -31,18 +31,26 @@ def get_regions():
     return ('us-east-1', 'us-west-2', 'ap-southeast-1', 'ap-northeast-1', 'eu-central-1')
 
 def get_modelIds():
-    return ('anthropic.claude-3-sonnet-20240229-v1:0', '')
+    return ('anthropic.claude-3-sonnet-20240229-v1:0', 'anthropic.claude-3-haiku-20240307-v1:0')
 
 def get_endpoints():
     return ('default', 'internal')
 
-default_para = {                            # 可以在运行之后的界面上修改
+default_para = {  # 可以在运行之后的界面上修改
     "anthropic.claude-3-sonnet-20240229-v1:0": {
         "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": 8191,
+        "max_tokens": 4096,
         "temperature": 0.5, # Use a lower value to decrease randomness in the response. Claude 0-1, default 0.5
         "top_k": 250,       # Use a lower value to ignore less probable options.  Claude 0-500, default 250
         "top_p": 1,         # Specify the number of token choices the model uses to generate the next token. Claude 0-1, default 1
+        "stop_sequences": ["end_turn"],
+        },
+    "anthropic.claude-3-haiku-20240307-v1:0": {
+        "anthropic_version": "bedrock-2023-05-31",
+        "max_tokens": 4096,
+        "temperature": 0.5, 
+        "top_k": 250,       
+        "top_p": 1,         
         "stop_sequences": ["end_turn"],
         },
 }
@@ -431,7 +439,7 @@ class ChatApp:
         sys_prompt_dict[prompt_title] = system_prompt
         with open(sys_prompt_path, "w", encoding="utf-8") as f:
             json.dump(sys_prompt_dict, f, indent=2, ensure_ascii=False)
-        messagebox.showinfo("Info", f"System prompt '{prompt_title}' saved successfully")
+        messagebox.showinfo("Info", f"System prompt '{prompt_title}' saved to {sys_prompt_path}")
         self.entry.focus_set()
         return
 
