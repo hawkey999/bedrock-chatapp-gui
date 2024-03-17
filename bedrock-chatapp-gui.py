@@ -9,6 +9,7 @@ import base64
 import mimetypes
 import os
 from io import BytesIO
+import fitz  # PyMuPDF 转换pdf
 os.environ['OS_ACTIVITY_DT_MODE'] = 'disable' 
 
 
@@ -222,7 +223,7 @@ class ChatApp:
         button_frame.grid_columnconfigure(0, weight=0)
         button_frame.grid_rowconfigure(0, weight=1)
 
-        self.browser_button = Button(button_frame, text="IMAGE", command=self.browse_file, width=8, height=2)
+        self.browser_button = Button(button_frame, text="Image/PDF", command=self.browse_file, width=8, height=2)
         self.browser_button.grid(row=0, column=0, sticky='ew')
         self.send_button = Button(button_frame, text="SEND", command=self.send_message, underline=0, width=8, height=2)
         self.send_button.grid(row=1, column=0, sticky='ew')
@@ -287,6 +288,8 @@ class ChatApp:
 
             # Construct context
             question = self.entry.get("1.0", tk.END).strip()
+            if question == "":
+                question = "?"
             self.history.insert(tk.END, "User: " + question + '\n\n')
             self.history.see(tk.END)
 
@@ -298,7 +301,6 @@ class ChatApp:
                     })
                 user_message = {"role": "user", "content": self.file_content}
                 self.file_content = []  # 清空上传文件的内容
-
             # 纯文本交互
             else:
                 user_message = {"role": "user", "content": question}
@@ -381,13 +383,11 @@ class ChatApp:
             self.history.see(tk.END)
         self.root.after(1000, self.check_queue)
     
-    # Click Select File
-    def browse_file(self):
-        local_file = filedialog.askopenfilename()
-        file_name = os.path.basename(local_file)
-        mime_type = mimetypes.guess_type(local_file)[0]            
-        image = Image.open(local_file)
+    # process upload image and display
+    def handle_image(self, image, file_name, mime_type):
         save_format = image.format
+        if not save_format:
+            save_format = "PNG"
         width, height = image.size
 
         if width > 1920 or height > 1920:
@@ -430,8 +430,32 @@ class ChatApp:
         self.history.image_create(tk.END, image=photo)
         self.history.images.append(photo)
         self.history.insert(tk.END, f"\nImage: {file_name}, Resolution: {width}x{height}\n")
-
     
+    # Click Select File
+    def browse_file(self):
+        local_files = filedialog.askopenfilenames(title='Select Files')
+        for local_file in local_files:
+            file_name = os.path.basename(local_file)
+            mime_type = mimetypes.guess_type(local_file)[0]
+            
+            # 图片类型直接处理
+            if mime_type[0:5] == 'image': 
+                image = Image.open(local_file)
+                self.handle_image(image, file_name, mime_type)
+
+            # PDF类型转换为多图
+            if mime_type == 'application/pdf':
+                pdf_document = fitz.open(local_file)
+                for page in pdf_document:
+                    pix = page.get_pixmap()  # 渲染 PDF 页面
+                    mode = "RGBA" if pix.alpha else "RGB"
+                    image = Image.frombytes(mode, [pix.width, pix.height], pix.samples)
+                    mime_type = 'image/png'
+                    self.handle_image(image, file_name, mime_type)
+
+            self.history.see(tk.END)
+        return
+
     # Save System Prompt
     def save_sys_prompt(self):
         prompt_title = self.sys_prompt_var.get()
