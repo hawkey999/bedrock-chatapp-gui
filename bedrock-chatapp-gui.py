@@ -429,7 +429,7 @@ class ChatApp:
         photo = ImageTk.PhotoImage(image)
         self.history.image_create(tk.END, image=photo)
         self.history.images.append(photo)
-        self.history.insert(tk.END, f"\nImage: {file_name}, Resolution: {width}x{height}\n")
+        self.history.insert(tk.END, f"\nImage: {file_name}, Resolution: {width}x{height}\n\n")
     
     # Click Select File
     def browse_file(self):
