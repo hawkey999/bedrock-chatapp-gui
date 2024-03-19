@@ -390,9 +390,9 @@ class ChatApp:
             save_format = "PNG"
         width, height = image.size
 
-        if width > 1920 or height > 1920:
+        if width > 1568 or height > 1568:
             max_dim = max(width, height)
-            ratio = 1920 / max_dim
+            ratio = 1568 / max_dim
             width = int(width * ratio)
             height = int(height * ratio)
             image = image.resize((width, height))
