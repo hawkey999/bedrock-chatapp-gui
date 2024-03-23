@@ -278,9 +278,9 @@ class ChatApp:
     # 清理历史消息，后面的对话将不会考虑Clear之前的历史上下文
     def clear_history(self, event=None):
         answers = "\n------Clear Context------\n\n"
-        self.file_content = []
         self.queue.put(answers)
         logger.info(answers)
+        self.file_content = []
         self.chat_history = []
         self.history_num.config(text=f"History: {len(self.chat_history)}")
 
@@ -328,8 +328,6 @@ class ChatApp:
             # 异步调用Bedrock API
             threading.Thread(target=self.generate_reply, args=(invoke_body,)).start()
             self.entry.delete("1.0", tk.END)
-            if self.remember_history.get() == False:
-                self.clear_history()
         except Exception as e:
             self.history.insert(tk.END, "Error instruction: " + str(e) + '\n')
         return "break"
@@ -381,6 +379,8 @@ class ChatApp:
         self.send_button.config(state=tk.NORMAL)
         self.entry.bind("<Return>", self.send_message)
         self.entry.bind("<Control-s>", self.send_message)
+        if self.remember_history.get() == False:
+            self.clear_history()
         return
 
     # 异步打印Bedrock返回消息
