@@ -207,8 +207,14 @@ class ChatApp:
         input_frame.grid_columnconfigure(0, weight=1)
         input_frame.grid_rowconfigure(0, weight=0)
 
-        entry_label = tk.Label(input_frame, text="INPUT: ")
-        entry_label.grid(row=0, column=0, sticky="w")
+        # entry_label = tk.Label(input_frame, text="INPUT: ")
+        # entry_label.grid(row=0, column=0, sticky="w")
+        # 增加一个checkbox，"remember history" ，默认勾选
+        self.remember_history = tk.BooleanVar()
+        self.remember_history.set(True)
+        self.remember_history_checkbox = tk.Checkbutton(input_frame, text="Remember Context", variable=self.remember_history)
+        self.remember_history_checkbox.grid(row=0, column=0, sticky="w")
+
         self.entry = Text(input_frame, height=4, font=custom_font)
         self.entry.grid(row=1, column=0, sticky="nsew")
         self.entry.focus_set()
@@ -271,7 +277,7 @@ class ChatApp:
 
     # 清理历史消息，后面的对话将不会考虑Clear之前的历史上下文
     def clear_history(self, event=None):
-        answers = "\n------Clear Conversatioin------\n\n"
+        answers = "\n------Clear Context------\n\n"
         self.file_content = []
         self.queue.put(answers)
         logger.info(answers)
@@ -322,6 +328,8 @@ class ChatApp:
             # 异步调用Bedrock API
             threading.Thread(target=self.generate_reply, args=(invoke_body,)).start()
             self.entry.delete("1.0", tk.END)
+            if self.remember_history.get() == False:
+                self.clear_history()
         except Exception as e:
             self.history.insert(tk.END, "Error instruction: " + str(e) + '\n')
         return "break"
