@@ -212,7 +212,7 @@ class ChatApp:
         # 增加一个checkbox，"remember history" ，默认勾选
         self.remember_history = tk.BooleanVar()
         self.remember_history.set(True)
-        self.remember_history_checkbox = tk.Checkbutton(input_frame, text="Remember Context", variable=self.remember_history)
+        self.remember_history_checkbox = tk.Checkbutton(input_frame, text="Remember Context", variable=self.remember_history, command=self.check_remember_history)
         self.remember_history_checkbox.grid(row=0, column=0, sticky="w")
 
         self.entry = Text(input_frame, height=4, font=custom_font)
@@ -320,9 +320,8 @@ class ChatApp:
 
             # Construct bedrock_para
             bedrock_para = json.loads(self.bedrock_para_text.get("1.0", tk.END).strip())
-            if self.modelId.startswith("anthropic.claude-3"):
-                bedrock_para['messages'] = prompt
-                bedrock_para['system'] = system_prompt
+            bedrock_para['messages'] = prompt
+            bedrock_para['system'] = system_prompt
 
             invoke_body = json.dumps(bedrock_para)
             # 异步调用Bedrock API
@@ -346,28 +345,27 @@ class ChatApp:
                                          endpoint_url="https://prod.us-west-2.dataplane.bedrock.aws.dev")
 
             # Invoke streaming model 
-            if self.modelId.startswith("anthropic.claude"):
-                response = self.client.invoke_model_with_response_stream(body=invoke_body, modelId=self.modelId, accept=accept, contentType=contentType)
-                for event in response.get('body'):
-                    answer = ""
-                    chunk_str = json.loads(event['chunk']['bytes'].decode('utf-8'))
-                    if chunk_str['type'] == "message_start":
-                        input_tokens = json.dumps(chunk_str['message']['usage']['input_tokens'])
-                        hints = f"Input tokens: {input_tokens}\n******\n"
-                    elif chunk_str['type'] == "content_block_delta":
-                        if chunk_str['delta']['type'] == 'text_delta':
-                            answer = chunk_str['delta']['text']
-                    elif chunk_str['type'] == "message_delta":
-                        hints=f"""\n******\nStop reason: {chunk_str['delta']['stop_reason']}; Stop sequence: {chunk_str['delta']['stop_sequence']}; Output tokens: {chunk_str['usage']['output_tokens']}"""
-                    elif chunk_str['type'] == "error":
-                        hints=json.dumps(chunk_str)
+            response = self.client.invoke_model_with_response_stream(body=invoke_body, modelId=self.modelId, accept=accept, contentType=contentType)
+            for event in response.get('body'):
+                answer = ""
+                chunk_str = json.loads(event['chunk']['bytes'].decode('utf-8'))
+                if chunk_str['type'] == "message_start":
+                    input_tokens = json.dumps(chunk_str['message']['usage']['input_tokens'])
+                    hints = f"Input tokens: {input_tokens}\n******\n"
+                elif chunk_str['type'] == "content_block_delta":
+                    if chunk_str['delta']['type'] == 'text_delta':
+                        answer = chunk_str['delta']['text']
+                elif chunk_str['type'] == "message_delta":
+                    hints=f"""\n******\nStop reason: {chunk_str['delta']['stop_reason']}; Stop sequence: {chunk_str['delta']['stop_sequence']}; Output tokens: {chunk_str['usage']['output_tokens']}"""
+                elif chunk_str['type'] == "error":
+                    hints=json.dumps(chunk_str)
 
-                    if hints:
-                        self.queue.put(hints)
-                        hints = ""
-                    else:
-                        self.queue.put(answer)
-                        answers += answer
+                if hints:
+                    self.queue.put(hints)
+                    hints = ""
+                else:
+                    self.queue.put(answer)
+                    answers += answer
 
         except Exception as e:
             self.queue.put(f"\n\nError: {str(e)}\n")
@@ -494,7 +492,6 @@ class ChatApp:
         return
     
     def del_sys_prompt(self, event=None):
-        
         prompt_title = self.sys_prompt_var.get()
         if prompt_title in sys_prompt_dict:
             confirm = messagebox.askyesno("Delete System Prompt", f"Are you sure you want to delete the system prompt '{prompt_title}'?")
@@ -510,6 +507,10 @@ class ChatApp:
         else:
             messagebox.showerror("Error", f"System prompt '{prompt_title}' not found")
         return
+
+    def check_remember_history(self, event=None):
+        if self.remember_history.get() == False:
+            self.clear_history()
 
 # Main
 if __name__ == '__main__':
