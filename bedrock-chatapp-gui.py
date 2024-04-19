@@ -22,6 +22,7 @@ accept = 'application/json'
 contentType = 'application/json'
 default_intruction = {"default": "你是一个用中文回答问题的AI机器人，你会一步步地思考"}
 sys_prompt_path = os.path.join(os.getcwd(), "bedrock_chatapp_prompt.json")
+global rewrite_text
 try:
     with open(sys_prompt_path, 'r', encoding="utf-8") as f:
         sys_prompt_dict = json.load(f)
@@ -29,10 +30,10 @@ except FileNotFoundError:
     sys_prompt_dict = default_intruction
 
 def get_regions():
-    return ('us-east-1', 'us-west-2', 'ap-southeast-1', 'ap-northeast-1', 'eu-central-1')
+    return ('us-east-1', 'us-west-2', 'ap-southeast-1', 'ap-northeast-1', 'eu-central-1', 'ap-southeast-2', 'eu-west-3')
 
 def get_modelIds():
-    return ('anthropic.claude-3-sonnet-20240229-v1:0', 'anthropic.claude-3-haiku-20240307-v1:0')
+    return ('anthropic.claude-3-opus-20240229-v1:0', 'anthropic.claude-3-sonnet-20240229-v1:0', 'anthropic.claude-3-haiku-20240307-v1:0')
 
 def get_endpoints():
     return ('default', 'internal')
@@ -47,6 +48,14 @@ default_para = {  # 可以在运行之后的界面上修改
         "stop_sequences": ["end_turn"],
         },
     "anthropic.claude-3-haiku-20240307-v1:0": {
+        "anthropic_version": "bedrock-2023-05-31",
+        "max_tokens": 4096,
+        "temperature": 0.5, 
+        "top_k": 250,       
+        "top_p": 1,         
+        "stop_sequences": ["end_turn"],
+        },
+    "anthropic.claude-3-opus-20240229-v1:0": {
         "anthropic_version": "bedrock-2023-05-31",
         "max_tokens": 4096,
         "temperature": 0.5, 
@@ -207,13 +216,21 @@ class ChatApp:
         input_frame.grid_columnconfigure(0, weight=1)
         input_frame.grid_rowconfigure(0, weight=0)
 
-        # entry_label = tk.Label(input_frame, text="INPUT: ")
-        # entry_label.grid(row=0, column=0, sticky="w")
-        # 增加一个checkbox，"remember history" ，默认勾选
+        inputbar_fram = tk.Frame(input_frame)
+        inputbar_fram.grid(row=0, column=0, sticky="w")
         self.remember_history = tk.BooleanVar()
         self.remember_history.set(True)
-        self.remember_history_checkbox = tk.Checkbutton(input_frame, text="Remember Context", variable=self.remember_history, command=self.check_remember_history)
-        self.remember_history_checkbox.grid(row=0, column=0, sticky="w")
+        self.remember_history_checkbox = tk.Checkbutton(inputbar_fram, text="Remember Context", variable=self.remember_history, command=self.check_remember_history)
+        self.remember_history_checkbox.grid(row=0, column=4, sticky="w")
+        rewrite_buton = tk.Button(inputbar_fram, text="Rewrite", width=8, height=1, command=self.rewrite)
+        rewrite_buton.grid(row=0, column=3, padx=5)
+        self.clear_button = Button(inputbar_fram, text="Clear Context", command=self.clear_history, width=8, height=1)
+        self.clear_button.grid(row=0, column=0, sticky='ew')
+        self.clean_button = Button(inputbar_fram, text="Clean Screen", command=self.clean_screen, width=8, height=1)
+        self.clean_button.grid(row=0, column=1, sticky='ew')
+        self.browser_button = Button(inputbar_fram, text="Image/PDF", command=self.browse_file, width=8, height=1)
+        self.browser_button.grid(row=0, column=2, sticky='ew')
+
 
         self.entry = Text(input_frame, height=4, font=custom_font)
         self.entry.grid(row=1, column=0, sticky="nsew")
@@ -229,12 +246,8 @@ class ChatApp:
         button_frame.grid_columnconfigure(0, weight=0)
         button_frame.grid_rowconfigure(0, weight=1)
 
-        self.browser_button = Button(button_frame, text="Image/PDF", command=self.browse_file, width=8, height=2)
-        self.browser_button.grid(row=0, column=0, sticky='ew')
         self.send_button = Button(button_frame, text="SEND", command=self.send_message, underline=0, width=8, height=2)
         self.send_button.grid(row=1, column=0, sticky='ew')
-        self.clean_button = Button(button_frame, text="CLEAR HIS.", command=self.clear_history, width=8, height=2)
-        self.clean_button.grid(row=0, column=1, sticky='ew')
         self.history_num = Label(button_frame, text="History: 0")
         self.history_num.grid(row=1, column=1, sticky='ew')
 
@@ -268,24 +281,29 @@ class ChatApp:
         self.chat_history.append(history_record)
         self.history_num.config(text=f"History: {len(self.chat_history)}")
 
-    # def clean_screen(self, event=None):
-    #     self.history.delete("1.0", tk.END)
-    #     self.clear_history()
-
     def just_enter(self, event=None):
         return
 
+    def rewrite(self, event=None):
+        self.entry.delete("1.0", tk.END)
+        self.entry.insert(tk.END, rewrite_text)
+
     # 清理历史消息，后面的对话将不会考虑Clear之前的历史上下文
     def clear_history(self, event=None):
-        answers = "\n------Clear Context------\n\n"
+        answers = "\n------ Context Cleared ------\n\n"
         self.queue.put(answers)
         logger.info(answers)
         self.file_content = []
         self.chat_history = []
         self.history_num.config(text=f"History: {len(self.chat_history)}")
+    
+    def clean_screen(self, event=None):
+        self.history.delete("1.0", tk.END)
+        self.clear_history()
 
     # 发送消息按钮
     def send_message(self, event=None):
+        global rewrite_text
         try:
             # Pause input and send button
             self.send_button.config(state=tk.DISABLED)
@@ -294,6 +312,7 @@ class ChatApp:
 
             # Construct context
             question = self.entry.get("1.0", tk.END).strip()
+            rewrite_text = question
             if question == "":
                 question = "?"
             self.history.insert(tk.END, "User: " + question + '\n\n')
