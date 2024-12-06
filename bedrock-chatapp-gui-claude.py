@@ -8,17 +8,16 @@ import configparser
 import base64
 import mimetypes
 import os
-import sys
 from io import BytesIO
 import fitz  # PyMuPDF 转换pdf
-import cv2
 os.environ['OS_ACTIVITY_DT_MODE'] = 'disable' 
 
+
 # default values
+custom_font_size = 14
 MAX_RETRIES = 3 
 MAX_SIZE_IN_MB = 5
 max_size = MAX_SIZE_IN_MB * 1024 * 1024  # 5MB 转换为字节
-custom_font_size = 12
 accept = 'application/json'
 contentType = 'application/json'
 default_intruction = {"default": "你是一个用中文回答问题的AI机器人，你会一步步地思考"}
@@ -30,38 +29,27 @@ try:
 except FileNotFoundError:
     sys_prompt_dict = default_intruction
 
-# set http proxy
-def should_use_proxy():
-    return len(sys.argv) > 1 and sys.argv[1].lower() == 'proxy'
-if should_use_proxy():
-    proxies = {'https': 'http://ilaw-proxy.pdx.corp.amazon.com:3128'}
-    config = botocore.config.Config(retries={'max_attempts': MAX_RETRIES},proxies=proxies)
-    print("Proxy enabled", proxies)
-else:
-    config = botocore.config.Config(retries={'max_attempts': MAX_RETRIES})
-    print("Proxy disabled. If want to enable proxy, use './bedrock.sh proxy'.")
-
 def get_regions():
-    return ('us-west-2', 'us-east-1', 'ap-southeast-1', 'ap-northeast-1', 'eu-central-1', 'ap-southeast-2', 'eu-west-3', 'ap-south-1')
+    return ('us-east-1', 'us-west-2', 'ap-southeast-1', 'ap-northeast-1', 'eu-central-1', 'ap-southeast-2', 'eu-west-3', 'ap-south-1')
 
 def get_modelIds():
-    return ('us.amazon.nova-pro-v1:0','us.amazon.nova-lite-v1:0', 'us.amazon.nova-micro-v1:0', 'anthropic.claude-3-5-sonnet-20241022-v2:0','anthropic.claude-3-opus-20240229-v1:0', 'anthropic.claude-3-5-haiku-20241022-v1:0')
+    return ('anthropic.claude-3-sonnet-20240229-v1:0', 'anthropic.claude-3-opus-20240229-v1:0', 'anthropic.claude-3-haiku-20240307-v1:0')
 
 def get_endpoints():
     return ('default', 'internal')
 
 default_para = {  # 可以在运行之后的界面上修改
-    "anthropic.claude-3-5-sonnet-20241022-v2:0": {
+    "anthropic.claude-3-sonnet-20240229-v1:0": {
         "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": 8192,
+        "max_tokens": 4096,
         "temperature": 0.5, # Use a lower value to decrease randomness in the response. Claude 0-1, default 0.5
         "top_k": 250,       # Use a lower value to ignore less probable options.  Claude 0-500, default 250
         "top_p": 1,         # Specify the number of token choices the model uses to generate the next token. Claude 0-1, default 1
         "stop_sequences": ["end_turn"],
         },
-    "anthropic.claude-3-5-haiku-20241022-v1:0": {
+    "anthropic.claude-3-haiku-20240307-v1:0": {
         "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": 8192,
+        "max_tokens": 4096,
         "temperature": 0.5, 
         "top_k": 250,       
         "top_p": 1,         
@@ -75,26 +63,7 @@ default_para = {  # 可以在运行之后的界面上修改
         "top_p": 1,         
         "stop_sequences": ["end_turn"],
         },
-    "us.amazon.nova-pro-v1:0": {
-        "max_new_tokens": 5000,
-        "temperature": 0.7, 
-        "top_k": 20,       
-        "top_p": 0.9,         
-        },
-    "us.amazon.nova-lite-v1:0": {
-        "max_new_tokens": 5000,
-        "temperature": 0.7, 
-        "top_k": 20,       
-        "top_p": 0.9,         
-        },
-    "us.amazon.nova-micro-v1:0": {
-        "max_new_tokens": 5000,
-        "temperature": 0.7, 
-        "top_k": 20,       
-        "top_p": 0.9,         
-        }
-    }
-
+}
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -159,7 +128,7 @@ class ChatApp:
         Label(selector_frame, text="Region").pack(side=tk.LEFT)
         regions = get_regions()
         self.region_var = tk.StringVar()
-        self.region_var.set(regions[0] if regions else "No Region Found")
+        self.region_var.set(regions[1] if regions else "No Region Found")
         self.region_menu = ttk.Combobox(selector_frame, width=10, textvariable=self.region_var, values=regions, state="readonly")
         self.region_menu.pack(side=tk.LEFT)
         self.region_menu.bind("<<ComboboxSelected>>", self.change_profile_region)
@@ -264,7 +233,7 @@ class ChatApp:
         self.clear_button.grid(row=0, column=0, sticky='ew')
         self.clean_button = Button(inputbar_frame, text="CleanScreen", command=self.clean_screen, width=12, height=1)
         self.clean_button.grid(row=0, column=1, sticky='ew')
-        self.browser_button = Button(inputbar_frame, text="FILE", command=self.browse_file, width=12, height=1)
+        self.browser_button = Button(inputbar_frame, text="Image/PDF", command=self.browse_file, width=12, height=1)
         self.browser_button.grid(row=0, column=2, sticky='ew')
         rewrite_buton = tk.Button(inputbar_frame, text="Rewrite", width=12, height=1, command=self.rewrite)
         rewrite_buton.grid(row=0, column=3, padx=5)
@@ -332,7 +301,7 @@ class ChatApp:
         global rewrite_text
         try:
             # Pause input and send button
-            # self.send_button.config(state=tk.DISABLED)
+            self.send_button.config(state=tk.DISABLED)
             self.entry.unbind("<Return>")
             self.entry.unbind("<Control-s>")
 
@@ -346,23 +315,15 @@ class ChatApp:
 
             # 多模态上传文件
             if self.file_content:
-                if self.modelId.startswith('us.amazon.nova-'):
-                    self.file_content.append({
-                            "text": question
-                        })
-                elif self.modelId.startswith('anthropic.claude-'):
-                    self.file_content.append({
-                            "type": "text",
-                            "text": question
-                        })
+                self.file_content.append({
+                        "type": "text",
+                        "text": question
+                    })
                 user_message = {"role": "user", "content": self.file_content}
                 self.file_content = []  # 清空上传文件的内容
             # 纯文本交互
             else:
-                if self.modelId.startswith('us.amazon.nova-'):
-                    user_message = {"role": "user", "content": [{"text": question}]}
-                elif self.modelId.startswith('anthropic.claude-'):
-                    user_message = {"role": "user", "content": question}
+                user_message = {"role": "user", "content": question}
 
             self.save_history(user_message)
             logger.info(json.dumps(user_message, ensure_ascii=False))
@@ -372,18 +333,9 @@ class ChatApp:
             self.history.see(tk.END)
 
             # Construct bedrock_para
-            if self.modelId.startswith('us.amazon.nova-'):
-                bedrock_para = {
-                    "inferenceConfig": json.loads(self.bedrock_para_text.get("1.0", tk.END).strip()),
-                    "schemaVersion": "messages-v1",
-                    "system": [{"text": system_prompt}],
-                    "messages": prompt
-                }
-
-            elif self.modelId.startswith('anthropic.claude-'):
-                bedrock_para = json.loads(self.bedrock_para_text.get("1.0", tk.END).strip())
-                bedrock_para['system'] = system_prompt
-                bedrock_para['messages'] = prompt
+            bedrock_para = json.loads(self.bedrock_para_text.get("1.0", tk.END).strip())
+            bedrock_para['messages'] = prompt
+            bedrock_para['system'] = system_prompt
 
             invoke_body = json.dumps(bedrock_para)
             # 异步调用Bedrock API
@@ -399,6 +351,7 @@ class ChatApp:
         try:
             # 每次调用都创建一个新的连接，避免idle导致连接断开，从而输入无响应等问题
             session = boto3.Session(profile_name=self.profile) 
+            config = botocore.config.Config(retries={'max_attempts': MAX_RETRIES})
             if self.endpoint == "default":
                 self.client = session.client("bedrock-runtime", region_name=self.region, config=config)
             elif self.endpoint == "internal":
@@ -410,26 +363,16 @@ class ChatApp:
             for event in response.get('body'):
                 answer = ""
                 chunk_str = json.loads(event['chunk']['bytes'].decode('utf-8'))
-                if self.modelId.startswith('us.amazon.nova-'):
-                    content_block_delta = chunk_str.get("contentBlockDelta")
-                    invocationMetrics = chunk_str.get("amazon-bedrock-invocationMetrics")
-                    if invocationMetrics:
-                        hints = "\n"+json.dumps(invocationMetrics)
-                    else:
-                        hints = ""
-                    if content_block_delta:
-                        answer = content_block_delta.get("delta").get("text")
-                elif self.modelId.startswith('anthropic.claude-'):
-                    if chunk_str['type'] == "message_start":
-                        input_tokens = json.dumps(chunk_str['message']['usage']['input_tokens'])
-                        hints = f"Input tokens: {input_tokens}\n******\n"
-                    elif chunk_str['type'] == "content_block_delta":
-                        if chunk_str['delta']['type'] == 'text_delta':
-                            answer = chunk_str['delta']['text']
-                    elif chunk_str['type'] == "message_delta":
-                        hints=f"""\n******\nStop reason: {chunk_str['delta']['stop_reason']}; Stop sequence: {chunk_str['delta']['stop_sequence']}; Output tokens: {chunk_str['usage']['output_tokens']}"""
-                    elif chunk_str['type'] == "error":
-                        hints=json.dumps(chunk_str)
+                if chunk_str['type'] == "message_start":
+                    input_tokens = json.dumps(chunk_str['message']['usage']['input_tokens'])
+                    hints = f"Input tokens: {input_tokens}\n******\n"
+                elif chunk_str['type'] == "content_block_delta":
+                    if chunk_str['delta']['type'] == 'text_delta':
+                        answer = chunk_str['delta']['text']
+                elif chunk_str['type'] == "message_delta":
+                    hints=f"""\n******\nStop reason: {chunk_str['delta']['stop_reason']}; Stop sequence: {chunk_str['delta']['stop_sequence']}; Output tokens: {chunk_str['usage']['output_tokens']}"""
+                elif chunk_str['type'] == "error":
+                    hints=json.dumps(chunk_str)
 
                 if hints:
                     self.queue.put(hints)
@@ -441,15 +384,11 @@ class ChatApp:
         except Exception as e:
             self.queue.put(f"\n\nError: {str(e)}\n")
         
-        if self.modelId.startswith('us.amazon.nova-'):
-            history_record = {"role": "assistant", "content": [{"text": answers}]}
-        elif self.modelId.startswith('anthropic.claude-'):
-            history_record = {"role": "assistant", "content": answers}
-        
-        # self.save_history(history_record)
+        history_record = {"role": "assistant", "content": answers}
+        self.save_history(history_record)
         logger.info(json.dumps(history_record, ensure_ascii=False))
         self.queue.put("\n---END---\n\n")
-        # self.send_button.config(state=tk.NORMAL)
+        self.send_button.config(state=tk.NORMAL)
         self.entry.bind("<Return>", self.send_message)
         self.entry.bind("<Control-s>", self.send_message)
         if self.remember_history.get() == False:
@@ -468,8 +407,7 @@ class ChatApp:
     def handle_image(self, image, file_name, mime_type):
         save_format = image.format
         if not save_format:
-            save_format = "png"
-        save_format = save_format.lower()
+            save_format = "PNG"
         width, height = image.size
 
         if width > 1568 or height > 1568:
@@ -497,24 +435,13 @@ class ChatApp:
             buffer.close()
 
         encoded_string = base64.b64encode(image_bytes)
-        if self.modelId.startswith('us.amazon.nova-'):
-            self.file_content.append({
-                            "image": {
-                                "format": save_format,
-                                "source": {
-                                    "bytes": encoded_string.decode('utf-8')
-                                }
-                            }
-                            })
-
-        elif self.modelId.startswith('anthropic.claude-'):
-            self.file_content.append({
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": mime_type,
-                                "data": encoded_string.decode('utf-8')
-                            }})
+        self.file_content.append({
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": mime_type,
+                            "data": encoded_string.decode('utf-8')
+                        }})
 
         # 改变"显示"的分辨率大小为500以内
         if width > 512:
@@ -535,65 +462,16 @@ class ChatApp:
             if mime_type[0:5] == 'image': 
                 image = Image.open(local_file)
                 self.handle_image(image, file_name, mime_type)
-                image.close()
 
-            # PDF
+            # PDF类型转换为多图
             if mime_type == 'application/pdf':
-                try:
-                    pdf_document = fitz.open(local_file)
-                    for page_num, page in enumerate(pdf_document):
-                        if self.modelId.startswith('us.amazon.nova-'):
-                            output_pdf = fitz.open()
-                            output_pdf.insert_pdf(pdf_document, from_page=page_num, to_page=page_num)
-                            doc_bytes = output_pdf.tobytes()
-                            if doc_bytes:
-                                pdf_string = base64.b64encode(doc_bytes)
-                                self.file_content.append({
-                                    "document": {
-                                        "format": "pdf",
-                                        "name": f"{file_name}_page_{page_num + 1}",
-                                        "source": {
-                                            "bytes": pdf_string.decode('utf-8')
-                                        }
-                                    }
-                                    })
-                            output_pdf.close()
-
-                        elif self.modelId.startswith('anthropic.claude-'):
-                            # Now Claude3 sonnet only support 20 images, jump off the for loop if more than 20
-                            if len(self.file_content) >= 20:
-                                messagebox.showinfo("Info", "Max 20 images or pdf pages for LLM inference")
-                                break
-                            pix = page.get_pixmap()  # 渲染 PDF 页面
-                            mode = "RGBA" if pix.alpha else "RGB"
-                            image = Image.frombytes(mode, [pix.width, pix.height], pix.samples)
-                            mime_type = 'image/png'
-                            self.handle_image(image, file_name, mime_type)
-                except Exception as e:
-                    self.history.insert(tk.END, "Error: " + str(e) + '\n')
-                pdf_document.close()
-                self.history.insert(tk.END, f"\nPDF: {file_name}\n\n")
-
-
-            # Video
-            if mime_type[0:5] == 'video': 
-                try:
-                    # 获取视频文件格式
-                    format = local_file.split('.')[-1].lower()
-                    with open(local_file, "rb") as video_file:
-                        binary_data = video_file.read()
-                        base_64_encoded_data = base64.b64encode(binary_data)
-                        self.file_content.append({
-                            "video": {
-                                "format": format,
-                                "source": {
-                                    "bytes": base_64_encoded_data.decode('utf-8')
-                                }
-                            }
-                            })
-                except Exception as e:
-                    self.history.insert(tk.END, "Error: " + str(e) + '\n')
-                self.history.insert(tk.END, f"\nVideo: {file_name}\n\n")
+                pdf_document = fitz.open(local_file)
+                for page in pdf_document:
+                    pix = page.get_pixmap()  # 渲染 PDF 页面
+                    mode = "RGBA" if pix.alpha else "RGB"
+                    image = Image.frombytes(mode, [pix.width, pix.height], pix.samples)
+                    mime_type = 'image/png'
+                    self.handle_image(image, file_name, mime_type)
 
             self.history.see(tk.END)
         return
