@@ -29,26 +29,15 @@ try:
         sys_prompt_dict = json.load(f)
 except FileNotFoundError:
     sys_prompt_dict = default_intruction
-
-# set http proxy
-def should_use_proxy():
-    return len(sys.argv) > 1 and sys.argv[1].lower() == 'proxy'
-if should_use_proxy():
-    proxies = {'https': 'http://ilaw-proxy.pdx.corp.amazon.com:3128'}
-    config = botocore.config.Config(retries={'max_attempts': MAX_RETRIES},proxies=proxies)
-    print("Proxy enabled", proxies)
-else:
-    config = botocore.config.Config(retries={'max_attempts': MAX_RETRIES})
-    print("Proxy disabled. If want to enable proxy, use './bedrock.sh proxy'.")
-
+    
 def get_regions():
     return ('us-west-2', 'us-east-1', 'ap-southeast-1', 'ap-northeast-1', 'eu-central-1', 'ap-southeast-2', 'eu-west-3', 'ap-south-1')
 
 def get_modelIds():
-    return ('us.amazon.nova-pro-v1:0','us.amazon.nova-lite-v1:0', 'us.amazon.nova-micro-v1:0', 'anthropic.claude-3-5-sonnet-20241022-v2:0','anthropic.claude-3-opus-20240229-v1:0', 'anthropic.claude-3-5-haiku-20241022-v1:0')
+    return ('us.anthropic.claude-3-7-sonnet-20250219-v1:0', 'us.amazon.nova-pro-v1:0','us.amazon.nova-lite-v1:0', 'us.amazon.nova-micro-v1:0', 'anthropic.claude-3-5-haiku-20241022-v1:0','anthropic.claude-3-5-sonnet-20241022-v2:0')
 
-def get_endpoints():
-    return ('default', 'internal')
+def get_proxy():
+    return ('Internal', 'NoProxy', 'Local')
 
 default_para = {  # 可以在运行之后的界面上修改
     "anthropic.claude-3-5-sonnet-20241022-v2:0": {
@@ -67,13 +56,13 @@ default_para = {  # 可以在运行之后的界面上修改
         "top_p": 1,         
         "stop_sequences": ["end_turn"],
         },
-    "anthropic.claude-3-opus-20240229-v1:0": {
+    "us.anthropic.claude-3-7-sonnet-20250219-v1:0": {
         "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": 4096,
-        "temperature": 0.5, 
-        "top_k": 250,       
-        "top_p": 1,         
-        "stop_sequences": ["end_turn"],
+        "max_tokens": 128000,
+        "thinking": {
+            "type": "enabled",
+            "budget_tokens": 32000
+            },
         },
     "us.amazon.nova-pro-v1:0": {
         "max_new_tokens": 5000,
@@ -164,13 +153,13 @@ class ChatApp:
         self.region_menu.pack(side=tk.LEFT)
         self.region_menu.bind("<<ComboboxSelected>>", self.change_profile_region)
 
-        Label(selector_frame, text="Endpoint").pack(side=tk.LEFT)
-        endpoints = get_endpoints()
-        self.endpoint_var = tk.StringVar()
-        self.endpoint_var.set(endpoints[0] if endpoints else "No Endpoints Found")
-        self.endpoint_var_menu = ttk.Combobox(selector_frame, width=5, textvariable=self.endpoint_var, values=endpoints, state="readonly")
-        self.endpoint_var_menu.pack(side=tk.LEFT)
-        self.endpoint_var_menu.bind("<<ComboboxSelected>>", self.change_profile_region)
+        Label(selector_frame, text="Proxy").pack(side=tk.LEFT)
+        proxy = get_proxy()
+        self.proxy_var = tk.StringVar()
+        self.proxy_var.set(proxy[0] if proxy else "No Proxy Found")
+        self.proxy_var_menu = ttk.Combobox(selector_frame, width=5, textvariable=self.proxy_var, values=proxy, state="readonly")
+        self.proxy_var_menu.pack(side=tk.LEFT)
+        self.proxy_var_menu.bind("<<ComboboxSelected>>", self.change_profile_region)
 
         Label(selector_frame, text="Model").pack(side=tk.LEFT)
         modelIds = get_modelIds()
@@ -284,11 +273,18 @@ class ChatApp:
         self.file_content = []
         self.queue = queue.Queue()
         self.root.after(1000, self.check_queue)
+            
+        # Add window close handler
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+    
+    def on_closing(self):
+        self.cleanup()
+        self.root.destroy()
 
     def change_profile_region(self, event=None):
         self.profile = self.profile_var.get()
         self.region = self.region_var.get()
-        self.endpoint = self.endpoint_var.get()
+        self.proxy = self.proxy_var.get()
 
     def change_modelId(self, event=None):
         self.modelId = self.modelId_var.get()
@@ -346,11 +342,11 @@ class ChatApp:
 
             # 多模态上传文件
             if self.file_content:
-                if self.modelId.startswith('us.amazon.nova-'):
+                if 'amazon.nova-' in self.modelId:
                     self.file_content.append({
                             "text": question
                         })
-                elif self.modelId.startswith('anthropic.claude-'):
+                elif 'anthropic.claude-' in self.modelId:
                     self.file_content.append({
                             "type": "text",
                             "text": question
@@ -359,9 +355,9 @@ class ChatApp:
                 self.file_content = []  # 清空上传文件的内容
             # 纯文本交互
             else:
-                if self.modelId.startswith('us.amazon.nova-'):
+                if 'amazon.nova-' in self.modelId:
                     user_message = {"role": "user", "content": [{"text": question}]}
-                elif self.modelId.startswith('anthropic.claude-'):
+                elif 'anthropic.claude-' in self.modelId:
                     user_message = {"role": "user", "content": question}
 
             self.save_history(user_message)
@@ -372,7 +368,7 @@ class ChatApp:
             self.history.see(tk.END)
 
             # Construct bedrock_para
-            if self.modelId.startswith('us.amazon.nova-'):
+            if 'amazon.nova-' in self.modelId:
                 bedrock_para = {
                     "inferenceConfig": json.loads(self.bedrock_para_text.get("1.0", tk.END).strip()),
                     "schemaVersion": "messages-v1",
@@ -380,7 +376,7 @@ class ChatApp:
                     "messages": prompt
                 }
 
-            elif self.modelId.startswith('anthropic.claude-'):
+            elif 'anthropic.claude-' in self.modelId:
                 bedrock_para = json.loads(self.bedrock_para_text.get("1.0", tk.END).strip())
                 bedrock_para['system'] = system_prompt
                 bedrock_para['messages'] = prompt
@@ -399,18 +395,22 @@ class ChatApp:
         try:
             # 每次调用都创建一个新的连接，避免idle导致连接断开，从而输入无响应等问题
             session = boto3.Session(profile_name=self.profile) 
-            if self.endpoint == "default":
-                self.client = session.client("bedrock-runtime", region_name=self.region, config=config)
-            elif self.endpoint == "internal":
-                self.client = session.client("bedrock-runtime", region_name=self.region, config=config,
-                                         endpoint_url="https://prod.us-west-2.dataplane.bedrock.aws.dev")
+            if self.proxy == "NoProxy":
+                clientConfig = botocore.config.Config(retries={'max_attempts': MAX_RETRIES})
+            elif self.proxy == "Internal":
+                proxies = {'https': 'http://ilaw-proxy.pdx.corp.amazon.com:3128'}
+                clientConfig = botocore.config.Config(retries={'max_attempts': MAX_RETRIES},proxies=proxies)
+            elif self.proxy == "Local":
+                proxies = {'https': 'socks5://127.0.0.1:1088'}
+                clientConfig = botocore.config.Config(retries={'max_attempts': MAX_RETRIES},proxies=proxies)
+            self.client = session.client("bedrock-runtime", region_name=self.region, config=clientConfig)
 
             # Invoke streaming model 
             response = self.client.invoke_model_with_response_stream(body=invoke_body, modelId=self.modelId, accept=accept, contentType=contentType)
             for event in response.get('body'):
                 answer = ""
                 chunk_str = json.loads(event['chunk']['bytes'].decode('utf-8'))
-                if self.modelId.startswith('us.amazon.nova-'):
+                if 'amazon.nova-' in self.modelId:
                     content_block_delta = chunk_str.get("contentBlockDelta")
                     invocationMetrics = chunk_str.get("amazon-bedrock-invocationMetrics")
                     if invocationMetrics:
@@ -419,15 +419,21 @@ class ChatApp:
                         hints = ""
                     if content_block_delta:
                         answer = content_block_delta.get("delta").get("text")
-                elif self.modelId.startswith('anthropic.claude-'):
+                elif 'anthropic.claude-' in self.modelId:
                     if chunk_str['type'] == "message_start":
                         input_tokens = json.dumps(chunk_str['message']['usage']['input_tokens'])
-                        hints = f"Input tokens: {input_tokens}\n******\n"
+                        hints = f"Input tokens: {input_tokens}\n******Answer******\n"
+                    elif chunk_str['type'] == "content_block_start" and chunk_str['content_block']['type'] == 'thinking':
+                            answer = "\n***Thinking START***\n"
                     elif chunk_str['type'] == "content_block_delta":
                         if chunk_str['delta']['type'] == 'text_delta':
                             answer = chunk_str['delta']['text']
+                        elif chunk_str['delta']['type'] == 'thinking_delta':
+                            answer = chunk_str['delta']['thinking']
+                        elif chunk_str['delta']['type'] == 'signature_delta':
+                            answer = "\n***Thinking END***\n\n"
                     elif chunk_str['type'] == "message_delta":
-                        hints=f"""\n******\nStop reason: {chunk_str['delta']['stop_reason']}; Stop sequence: {chunk_str['delta']['stop_sequence']}; Output tokens: {chunk_str['usage']['output_tokens']}"""
+                        hints=f"""\n******Answer END******\n\nStop reason: {chunk_str['delta']['stop_reason']}; Stop sequence: {chunk_str['delta']['stop_sequence']}; Output tokens: {chunk_str['usage']['output_tokens']}\n\n"""
                     elif chunk_str['type'] == "error":
                         hints=json.dumps(chunk_str)
 
@@ -441,9 +447,9 @@ class ChatApp:
         except Exception as e:
             self.queue.put(f"\n\nError: {str(e)}\n")
         
-        if self.modelId.startswith('us.amazon.nova-'):
+        if 'amazon.nova-' in self.modelId:
             history_record = {"role": "assistant", "content": [{"text": answers}]}
-        elif self.modelId.startswith('anthropic.claude-'):
+        elif 'anthropic.claude-' in self.modelId:
             history_record = {"role": "assistant", "content": answers}
         
         # self.save_history(history_record)
@@ -458,18 +464,34 @@ class ChatApp:
 
     # 异步打印Bedrock返回消息
     def check_queue(self):
+        try:
+            while not self.queue.empty():
+                answer = self.queue.get_nowait()  # Use get_nowait() instead of get()
+                if self.history and self.history.winfo_exists():  # Check if widget still exists
+                    self.history.insert(tk.END, answer)
+                    self.history.see(tk.END)
+            # Schedule next check only if root window exists
+            if self.root and self.root.winfo_exists():
+                self.root.after(1000, self.check_queue)
+        except Exception as e:
+            logger.error(f"Error in check_queue: {str(e)}")
+
+    def cleanup(self):
+        # Cancel any pending after callbacks
+        if hasattr(self, 'root') and self.root:
+            self.root.after_cancel(self.check_queue)
+        
+        # Clear queue
         while not self.queue.empty():
-            answer = self.queue.get()
-            self.history.insert(tk.END, answer)
-            self.history.see(tk.END)
-        self.root.after(1000, self.check_queue)
-    
+            try:
+                self.queue.get_nowait()
+            except queue.Empty:
+                break
+
     # process upload image and display
     def handle_image(self, image, file_name, mime_type):
-        save_format = image.format
-        if not save_format:
-            save_format = "png"
-        save_format = save_format.lower()
+        # Use default format png if no format detected
+        save_format = (image.format or "png").lower()
         width, height = image.size
 
         if width > 1568 or height > 1568:
@@ -497,7 +519,7 @@ class ChatApp:
             buffer.close()
 
         encoded_string = base64.b64encode(image_bytes)
-        if self.modelId.startswith('us.amazon.nova-'):
+        if 'amazon.nova-' in self.modelId:
             self.file_content.append({
                             "image": {
                                 "format": save_format,
@@ -507,7 +529,7 @@ class ChatApp:
                             }
                             })
 
-        elif self.modelId.startswith('anthropic.claude-'):
+        elif 'anthropic.claude-' in self.modelId:
             self.file_content.append({
                             "type": "image",
                             "source": {
@@ -542,7 +564,7 @@ class ChatApp:
                 try:
                     pdf_document = fitz.open(local_file)
                     for page_num, page in enumerate(pdf_document):
-                        if self.modelId.startswith('us.amazon.nova-'):
+                        if 'amazon.nova-' in self.modelId:
                             output_pdf = fitz.open()
                             output_pdf.insert_pdf(pdf_document, from_page=page_num, to_page=page_num)
                             doc_bytes = output_pdf.tobytes()
@@ -559,7 +581,7 @@ class ChatApp:
                                     })
                             output_pdf.close()
 
-                        elif self.modelId.startswith('anthropic.claude-'):
+                        elif 'anthropic.claude-' in self.modelId:
                             # Now Claude3 sonnet only support 20 images, jump off the for loop if more than 20
                             if len(self.file_content) >= 20:
                                 messagebox.showinfo("Info", "Max 20 images or pdf pages for LLM inference")
@@ -649,10 +671,15 @@ class ChatApp:
         if self.remember_history.get() == False:
             self.clear_history()
 
+
+
 # Main
 if __name__ == '__main__':
     set_profile()
     logger.info("Starting... logging to ./bedrock_chatapp_history.log")
     root = tk.Tk()
     app = ChatApp(root)
-    root.mainloop()
+    try:
+        root.mainloop()
+    finally:
+        app.cleanup()
