@@ -34,12 +34,15 @@ def get_regions():
     return ('us-west-2', 'us-east-1', 'ap-southeast-1', 'ap-northeast-1', 'eu-central-1', 'ap-southeast-2', 'eu-west-3', 'ap-south-1')
 
 def get_modelIds():
-    return ('us.anthropic.claude-3-7-sonnet-20250219-v1:0', 'us.amazon.nova-pro-v1:0','us.amazon.nova-lite-v1:0', 'us.amazon.nova-micro-v1:0', 'anthropic.claude-3-5-haiku-20241022-v1:0','anthropic.claude-3-5-sonnet-20241022-v2:0')
+    return ('us.deepseek.r1-v1:0', 'us.anthropic.claude-3-7-sonnet-20250219-v1:0', 'us.amazon.nova-pro-v1:0','us.amazon.nova-lite-v1:0', 'us.amazon.nova-micro-v1:0', 'anthropic.claude-3-5-haiku-20241022-v1:0','anthropic.claude-3-5-sonnet-20241022-v2:0')
 
 def get_proxy():
-    return ('Internal', 'NoProxy', 'Local')
+    return ('NoProxy', 'Internal', 'Local')
 
 default_para = {  # 可以在运行之后的界面上修改
+    "us.deepseek.r1-v1:0": {
+        "max_tokens": 32768,
+        },
     "anthropic.claude-3-5-sonnet-20241022-v2:0": {
         "anthropic_version": "bedrock-2023-05-31",
         "max_tokens": 8192,
@@ -301,7 +304,8 @@ class ChatApp:
 
     def save_history(self, history_record):     
         self.chat_history.append(history_record)
-        self.history_num.config(text=f"| History: {len(self.chat_history)} |")
+        #self.history_num.config(text=f"| History: {len(self.chat_history)} |")
+        return
 
     def just_enter(self, event=None):
         return
@@ -359,6 +363,8 @@ class ChatApp:
                     user_message = {"role": "user", "content": [{"text": question}]}
                 elif 'anthropic.claude-' in self.modelId:
                     user_message = {"role": "user", "content": question}
+                elif 'deepseek' in self.modelId:
+                    user_message = {"role": "user", "content": question}
 
             self.save_history(user_message)
             logger.info(json.dumps(user_message, ensure_ascii=False))
@@ -375,11 +381,15 @@ class ChatApp:
                     "system": [{"text": system_prompt}],
                     "messages": prompt
                 }
-
             elif 'anthropic.claude-' in self.modelId:
                 bedrock_para = json.loads(self.bedrock_para_text.get("1.0", tk.END).strip())
                 bedrock_para['system'] = system_prompt
                 bedrock_para['messages'] = prompt
+            elif 'deepseek' in self.modelId:
+                bedrock_para = json.loads(self.bedrock_para_text.get("1.0", tk.END).strip())
+                #formatted_prompt = f"""<｜begin▁of▁sentence｜><System>{system_prompt}<｜User｜>{prompt}\n"""
+                formatted_prompt = f"""<｜begin▁of▁sentence｜><｜User｜>{prompt}<｜Assistant｜><think>\n"""
+                bedrock_para['prompt'] = formatted_prompt
 
             invoke_body = json.dumps(bedrock_para)
             # 异步调用Bedrock API
@@ -436,6 +446,17 @@ class ChatApp:
                         hints=f"""\n******Answer END******\n\nStop reason: {chunk_str['delta']['stop_reason']}; Stop sequence: {chunk_str['delta']['stop_sequence']}; Output tokens: {chunk_str['usage']['output_tokens']}\n\n"""
                     elif chunk_str['type'] == "error":
                         hints=json.dumps(chunk_str)
+                elif 'deepseek' in self.modelId:
+                    choices = chunk_str['choices']
+                    answer = choices[0]['text']
+                    if 'amazon-bedrock-invocationMetrics' in chunk_str:
+                        usage = chunk_str['amazon-bedrock-invocationMetrics']
+                        hints = f"""\n******Answer END******\n\nInput tokens: {usage['inputTokenCount']}; Output tokens: {usage['outputTokenCount']}\n"""
+                    else:
+                        hints = ""
+                    if choices[0]['stop_reason'] is not None:
+                        hints += f"Stop reason: {choices[0]['stop_reason']}\n\n"
+                    
 
                 if hints:
                     self.queue.put(hints)
@@ -451,8 +472,10 @@ class ChatApp:
             history_record = {"role": "assistant", "content": [{"text": answers}]}
         elif 'anthropic.claude-' in self.modelId:
             history_record = {"role": "assistant", "content": answers}
-        
-        # self.save_history(history_record)
+        elif 'deepseek' in self.modelId:
+            history_record = {"role": "assistant", "content": answers}
+
+        self.save_history(history_record)
         logger.info(json.dumps(history_record, ensure_ascii=False))
         self.queue.put("\n---END---\n\n")
         # self.send_button.config(state=tk.NORMAL)
