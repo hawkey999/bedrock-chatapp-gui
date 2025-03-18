@@ -8,10 +8,8 @@ import configparser
 import base64
 import mimetypes
 import os
-import sys
 from io import BytesIO
-import fitz  # PyMuPDF 转换pdf
-import cv2
+import fitz  # PyMuPDF 转换pdf 
 os.environ['OS_ACTIVITY_DT_MODE'] = 'disable' 
 
 # default values
@@ -411,8 +409,11 @@ class ChatApp:
                 proxies = {'https': 'http://ilaw-proxy.pdx.corp.amazon.com:3128'}
                 clientConfig = botocore.config.Config(retries={'max_attempts': MAX_RETRIES},proxies=proxies)
             elif self.proxy == "Local":
-                proxies = {'https': 'socks5://127.0.0.1:1088'}
-                clientConfig = botocore.config.Config(retries={'max_attempts': MAX_RETRIES},proxies=proxies)
+                proxies = {'https': 'socks5h://127.0.0.1:1088'}
+                clientConfig = botocore.config.Config(retries={'max_attempts': MAX_RETRIES},
+                                                      proxies=proxies, 
+                                                      connect_timeout=15,
+                                                      read_timeout=15)
             self.client = session.client("bedrock-runtime", region_name=self.region, config=clientConfig)
 
             # Invoke streaming model 
