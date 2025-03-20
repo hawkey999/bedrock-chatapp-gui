@@ -10,7 +10,10 @@ import mimetypes
 import os
 from io import BytesIO
 import fitz  # PyMuPDF 转换pdf 
+import socket
+import socks
 os.environ['OS_ACTIVITY_DT_MODE'] = 'disable' 
+default_socks = socket.socket
 
 # default values
 MAX_RETRIES = 3 
@@ -35,7 +38,7 @@ def get_modelIds():
     return ('us.deepseek.r1-v1:0', 'us.anthropic.claude-3-7-sonnet-20250219-v1:0', 'us.amazon.nova-pro-v1:0','us.amazon.nova-lite-v1:0', 'us.amazon.nova-micro-v1:0', 'anthropic.claude-3-5-haiku-20241022-v1:0','anthropic.claude-3-5-sonnet-20241022-v2:0')
 
 def get_proxy():
-    return ('NoProxy', 'Internal', 'Local')
+    return ('NoProxy', 'Local')
 
 default_para = {  # 可以在运行之后的界面上修改
     "us.deepseek.r1-v1:0": {
@@ -404,14 +407,16 @@ class ChatApp:
             # 每次调用都创建一个新的连接，避免idle导致连接断开，从而输入无响应等问题
             session = boto3.Session(profile_name=self.profile) 
             if self.proxy == "NoProxy":
-                clientConfig = botocore.config.Config(retries={'max_attempts': MAX_RETRIES})
-            elif self.proxy == "Internal":
-                proxies = {'https': 'http://ilaw-proxy.pdx.corp.amazon.com:3128'}
-                clientConfig = botocore.config.Config(retries={'max_attempts': MAX_RETRIES},proxies=proxies)
-            elif self.proxy == "Local":
-                proxies = {'https': 'socks5h://127.0.0.1:1088'}
+                socket.socket = default_socks
                 clientConfig = botocore.config.Config(retries={'max_attempts': MAX_RETRIES},
-                                                      proxies=proxies, 
+                                                      connect_timeout=15,
+                                                      read_timeout=15)
+
+            elif self.proxy == "Local":
+                # Set up the SOCKS proxy at the socket level
+                socks.set_default_proxy(socks.SOCKS5, "127.0.0.1", 1088)
+                socket.socket = socks.socksocket
+                clientConfig = botocore.config.Config(retries={'max_attempts': MAX_RETRIES},
                                                       connect_timeout=15,
                                                       read_timeout=15)
             self.client = session.client("bedrock-runtime", region_name=self.region, config=clientConfig)
