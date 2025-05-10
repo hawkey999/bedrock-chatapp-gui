@@ -35,58 +35,89 @@ def get_regions():
     return ('us-west-2', 'us-east-1', 'ap-southeast-1', 'ap-northeast-1', 'eu-central-1', 'ap-southeast-2', 'eu-west-3', 'ap-south-1')
 
 def get_modelIds():
-    return ('us.deepseek.r1-v1:0', 'us.anthropic.claude-3-7-sonnet-20250219-v1:0', 'us.amazon.nova-pro-v1:0','us.amazon.nova-lite-v1:0', 'us.amazon.nova-micro-v1:0', 'anthropic.claude-3-5-haiku-20241022-v1:0','anthropic.claude-3-5-sonnet-20241022-v2:0')
+    return ('us.deepseek.r1-v1:0', 'us.amazon.nova-premier-v1:0', 'us.anthropic.claude-3-7-sonnet-20250219-v1:0','anthropic.claude-3-5-sonnet-20241022-v2:0', 'anthropic.claude-3-5-haiku-20241022-v1:0', 'us.amazon.nova-pro-v1:0','us.amazon.nova-lite-v1:0', 'us.amazon.nova-micro-v1:0')
 
 def get_proxy():
     return ('NoProxy', 'Local')
 
 default_para = {  # 可以在运行之后的界面上修改
     "us.deepseek.r1-v1:0": {
-        "max_tokens": 32768,
+        "Default": {
+            "temperature": 0.5,
+            "top_p": 0.9,
+            "max_tokens": 32768,
         },
+    },
     "anthropic.claude-3-5-sonnet-20241022-v2:0": {
-        "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": 8192,
-        "temperature": 0.5, # Use a lower value to decrease randomness in the response. Claude 0-1, default 0.5
-        "top_k": 250,       # Use a lower value to ignore less probable options.  Claude 0-500, default 250
-        "top_p": 1,         # Specify the number of token choices the model uses to generate the next token. Claude 0-1, default 1
-        "stop_sequences": ["end_turn"],
+        "Default": {
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": 8192,
+            "temperature": 0.5, # Use a lower value to decrease randomness in the response. Claude 0-1, default 0.5
+            "top_k": 250,       # Use a lower value to ignore less probable options.  Claude 0-500, default 250
+            "top_p": 1,         # Specify the number of token choices the model uses to generate the next token. Claude 0-1, default 1
+            "stop_sequences": ["end_turn"],
         },
+    },
     "anthropic.claude-3-5-haiku-20241022-v1:0": {
-        "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": 8192,
-        "temperature": 0.5, 
-        "top_k": 250,       
-        "top_p": 1,         
-        "stop_sequences": ["end_turn"],
+        "Default": {
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": 8192,
+            "temperature": 0.5, 
+            "top_k": 250,       
+            "top_p": 1,         
+            "stop_sequences": ["end_turn"],
         },
+    },
     "us.anthropic.claude-3-7-sonnet-20250219-v1:0": {
-        "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": 128000,
-        "thinking": {
-            "type": "enabled",
-            "budget_tokens": 32000
+        "Think": {
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": 128000,
+            "thinking": {
+                "type": "enabled",
+                "budget_tokens": 32000
             },
         },
+        "No-Think": {
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": 128000,
+            "temperature": 0.5, 
+            "top_k": 250,       
+            "top_p": 1,         
+        },
+    },
+    "us.amazon.nova-premier-v1:0": {
+        "Default": {
+            "max_new_tokens": 32000,
+            "temperature": 0.7, 
+            "top_k": 20,       
+            "top_p": 0.9,
+        },
+    },
     "us.amazon.nova-pro-v1:0": {
-        "max_new_tokens": 5000,
-        "temperature": 0.7, 
-        "top_k": 20,       
-        "top_p": 0.9,         
+        "Default": {
+            "max_new_tokens": 32000,
+            "temperature": 0.7, 
+            "top_k": 20,       
+            "top_p": 0.9,
         },
+    },
     "us.amazon.nova-lite-v1:0": {
-        "max_new_tokens": 5000,
-        "temperature": 0.7, 
-        "top_k": 20,       
-        "top_p": 0.9,         
+        "Default": {
+            "max_new_tokens": 32000,
+            "temperature": 0.7, 
+            "top_k": 20,       
+            "top_p": 0.9,
         },
+    },
     "us.amazon.nova-micro-v1:0": {
-        "max_new_tokens": 5000,
-        "temperature": 0.7, 
-        "top_k": 20,       
-        "top_p": 0.9,         
-        }
+        "Default": {
+            "max_new_tokens": 32000,
+            "temperature": 0.7, 
+            "top_k": 20,       
+            "top_p": 0.9,
+        },
     }
+}
 
 
 logger = logging.getLogger(__name__)
@@ -172,6 +203,14 @@ class ChatApp:
         self.modelId_menu = ttk.Combobox(selector_frame, width=30, textvariable=self.modelId_var, values=modelIds, state="readonly")
         self.modelId_menu.pack(side=tk.LEFT)
         self.modelId_menu.bind("<<ComboboxSelected>>", self.change_modelId)
+        
+        # 添加参数预设选择器
+        Label(selector_frame, text="ModelPara").pack(side=tk.LEFT)
+        self.preset_var = tk.StringVar()
+        self.preset_var.set("Default")
+        self.preset_menu = ttk.Combobox(selector_frame, width=10, textvariable=self.preset_var, values=["Default"], state="readonly")
+        self.preset_menu.pack(side=tk.LEFT)
+        self.preset_menu.bind("<<ComboboxSelected>>", self.change_preset)
 
         Label(selector_frame, text="Font").pack(side=tk.LEFT)
         fontSize = ('8', '10', '12', '14', '16', '18', '20', '22', '24', '26', '28')
@@ -188,7 +227,7 @@ class ChatApp:
         bedrock_para_frame.grid_rowconfigure(1, weight=1)
         bedrock_para_frame.grid_rowconfigure(4, weight=1)
 
-        Label(bedrock_para_frame, text="Inference Para").grid(row=0, column=0, sticky='w')
+        Label(bedrock_para_frame, text="Model Para Detail").grid(row=0, column=0, sticky='w')
         self.bedrock_para = tk.StringVar()
         self.bedrock_para.set(json.dumps(default_para, indent=1))
         self.bedrock_para_text = Text(bedrock_para_frame, font=custom_font, width=15, height=5)
@@ -292,8 +331,17 @@ class ChatApp:
 
     def change_modelId(self, event=None):
         self.modelId = self.modelId_var.get()
+        # 更新参数预设下拉菜单
+        presets = list(default_para[self.modelId].keys())
+        self.preset_var.set(presets[0])  # 默认选择第一个预设
+        self.preset_menu['values'] = presets
+        # 更新参数显示
+        self.change_preset()
+        
+    def change_preset(self, event=None):
+        preset = self.preset_var.get()
         self.bedrock_para_text.delete("1.0", tk.END)
-        self.bedrock_para_text.insert(tk.END, json.dumps(default_para[self.modelId], indent=1))
+        self.bedrock_para_text.insert(tk.END, json.dumps(default_para[self.modelId][preset], indent=1))
 
     def change_fontSize(self, event=None):
         self.fontSize = self.fontSize_var.get()
