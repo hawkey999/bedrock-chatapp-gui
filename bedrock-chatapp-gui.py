@@ -35,12 +35,46 @@ def get_regions():
     return ('us-west-2', 'us-east-1', 'ap-southeast-1', 'ap-northeast-1', 'eu-central-1', 'ap-southeast-2', 'eu-west-3', 'ap-south-1')
 
 def get_modelIds():
-    return ('us.deepseek.r1-v1:0', 'us.amazon.nova-premier-v1:0', 'us.anthropic.claude-3-7-sonnet-20250219-v1:0','anthropic.claude-3-5-sonnet-20241022-v2:0', 'anthropic.claude-3-5-haiku-20241022-v1:0', 'us.amazon.nova-pro-v1:0','us.amazon.nova-lite-v1:0', 'us.amazon.nova-micro-v1:0')
+    return ('us.anthropic.claude-3-7-sonnet-20250219-v1:0', 'us.anthropic.claude-sonnet-4-20250514-v1:0', 'us.anthropic.claude-opus-4-20250514-v1:0', 'us.deepseek.r1-v1:0', 'us.amazon.nova-premier-v1:0', 'anthropic.claude-3-5-sonnet-20241022-v2:0', 'anthropic.claude-3-5-haiku-20241022-v1:0', 'us.amazon.nova-pro-v1:0','us.amazon.nova-lite-v1:0', 'us.amazon.nova-micro-v1:0')
 
 def get_proxy():
     return ('NoProxy', 'Local')
 
 default_para = {  # 可以在运行之后的界面上修改
+    "us.anthropic.claude-sonnet-4-20250514-v1:0": {
+        "No-Think": {
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": 32000,
+            "temperature": 0.5, 
+            "top_k": 250,       
+            "top_p": 1,         
+        },
+        "Think": {
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": 32000,
+            "thinking": {
+                "type": "enabled",
+                "budget_tokens": 16000
+            },
+        },
+    },
+    "us.anthropic.claude-opus-4-20250514-v1:0": {
+        "No-Think": {
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": 32000,
+            "temperature": 0.5, 
+            "top_k": 250,       
+            "top_p": 1,         
+        },
+        "Think": {
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": 32000,
+            "thinking": {
+                "type": "enabled",
+                "budget_tokens": 16000
+            },
+        },
+    },
     "us.deepseek.r1-v1:0": {
         "Default": {
             "temperature": 0.5,
@@ -69,20 +103,20 @@ default_para = {  # 可以在运行之后的界面上修改
         },
     },
     "us.anthropic.claude-3-7-sonnet-20250219-v1:0": {
+        "No-Think": {
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": 32000,
+            "temperature": 0.5, 
+            "top_k": 250,       
+            "top_p": 1,         
+        },
         "Think": {
             "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": 128000,
+            "max_tokens": 64000,
             "thinking": {
                 "type": "enabled",
                 "budget_tokens": 32000
             },
-        },
-        "No-Think": {
-            "anthropic_version": "bedrock-2023-05-31",
-            "max_tokens": 128000,
-            "temperature": 0.5, 
-            "top_k": 250,       
-            "top_p": 1,         
         },
     },
     "us.amazon.nova-premier-v1:0": {
@@ -95,7 +129,7 @@ default_para = {  # 可以在运行之后的界面上修改
     },
     "us.amazon.nova-pro-v1:0": {
         "Default": {
-            "max_new_tokens": 32000,
+            "max_new_tokens": 10000,
             "temperature": 0.7, 
             "top_k": 20,       
             "top_p": 0.9,
@@ -103,7 +137,7 @@ default_para = {  # 可以在运行之后的界面上修改
     },
     "us.amazon.nova-lite-v1:0": {
         "Default": {
-            "max_new_tokens": 32000,
+            "max_new_tokens": 10000,
             "temperature": 0.7, 
             "top_k": 20,       
             "top_p": 0.9,
@@ -111,7 +145,7 @@ default_para = {  # 可以在运行之后的界面上修改
     },
     "us.amazon.nova-micro-v1:0": {
         "Default": {
-            "max_new_tokens": 32000,
+            "max_new_tokens": 10000,
             "temperature": 0.7, 
             "top_k": 20,       
             "top_p": 0.9,
@@ -639,35 +673,70 @@ class ChatApp:
             # PDF
             if mime_type == 'application/pdf':
                 try:
-                    pdf_document = fitz.open(local_file)
-                    for page_num, page in enumerate(pdf_document):
-                        if 'amazon.nova-' in self.modelId:
-                            output_pdf = fitz.open()
-                            output_pdf.insert_pdf(pdf_document, from_page=page_num, to_page=page_num)
-                            doc_bytes = output_pdf.tobytes()
-                            if doc_bytes:
-                                pdf_string = base64.b64encode(doc_bytes)
+                    with open(local_file, "rb") as pdf_document:
+                        pdf_string = pdf_document.read()
+                        if pdf_string:
+                            pdf_string = base64.b64encode(pdf_string)
+                            if 'amazon.nova-' in self.modelId:
                                 self.file_content.append({
                                     "document": {
                                         "format": "pdf",
-                                        "name": f"{file_name}_page_{page_num + 1}",
+                                        "name": file_name,
                                         "source": {
                                             "bytes": pdf_string.decode('utf-8')
                                         }
                                     }
                                     })
-                            output_pdf.close()
 
-                        elif 'anthropic.claude-' in self.modelId:
-                            # Now Claude3 sonnet only support 20 images, jump off the for loop if more than 20
-                            if len(self.file_content) >= 20:
-                                messagebox.showinfo("Info", "Max 20 images or pdf pages for LLM inference")
-                                break
-                            pix = page.get_pixmap()  # 渲染 PDF 页面
-                            mode = "RGBA" if pix.alpha else "RGB"
-                            image = Image.frombytes(mode, [pix.width, pix.height], pix.samples)
-                            mime_type = 'image/png'
-                            self.handle_image(image, file_name, mime_type)
+                            elif 'anthropic.claude-' in self.modelId:
+                                self.file_content.append({
+                                    "type": "document",
+                                    "source":{
+                                        "type": "base64",
+                                        "media_type": "application/pdf",
+                                        "data": pdf_string.decode('utf-8'),
+                                        },
+                                    "title": file_name,
+                                    "citations": {"enabled": True},
+                                    # "cache_control": {"type": "ephemeral"}
+                                }
+                                )
+                    # pdf_document = fitz.open(local_file)
+                    # for page_num, page in enumerate(pdf_document):
+                    #     output_pdf = fitz.open()
+                    #     output_pdf.insert_pdf(pdf_document, from_page=page_num, to_page=page_num)
+                    #     doc_bytes = output_pdf.tobytes()
+                    #     if doc_bytes:
+                    #         pdf_string = base64.b64encode(doc_bytes)
+                    #         if 'amazon.nova-' in self.modelId:
+                    #             self.file_content.append({
+                    #                 "document": {
+                    #                     "format": "pdf",
+                    #                     "name": f"{file_name}_page_{page_num + 1}",
+                    #                     "source": {
+                    #                         "bytes": pdf_string.decode('utf-8')
+                    #                     }
+                    #                 }
+                    #                 })
+
+                    #         elif 'anthropic.claude-' in self.modelId:
+                    #             # Now Claude support PDF 100 pages
+                    #             if len(self.file_content) >= 100:
+                    #                 messagebox.showinfo("Info", "Max 100 pdf pages for Claude inference")
+                    #                 break
+                    #             self.file_content.append({
+                    #                 "type": "document",
+                    #                 "source":{
+                    #                     "type": "base64",
+                    #                     "media_type": "application/pdf",
+                    #                     "data": pdf_string.decode('utf-8'),
+                    #                     },
+                    #                 "title": f"{file_name}_page_{page_num + 1}",
+                    #                 "citations": {"enabled": True},
+                    #                 # "cache_control": {"type": "ephemeral"}
+                    #             }
+                    #             )
+                    #     output_pdf.close()
                 except Exception as e:
                     self.history.insert(tk.END, "Error: " + str(e) + '\n')
                 pdf_document.close()
