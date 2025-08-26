@@ -1,40 +1,243 @@
-# Bedrock-chatapp-gui
+# AWS Bedrock ChatApp - Enhanced Version
 
-本地运行 GUI(python) 与 Amazon Bedrock 背后的多个大模型进行对话交互，例如 Claude3。会带上上次的对话记录，直到你点Clear清理。并且方便随时调整参数和系统提示词。
+一个现代化的 AWS Bedrock AI 聊天应用程序，具有增强的功能和用户界面。
 
-* 自动读取本地配置的 AWS Profile，可以选择切换
-* 选择支持 Bedrock 的 Region 和模型，注意你的 AWS 账号需要 Request Access 对应的模型。最新版本 bedrock-chatapp-gui.py 支持了 Claude 3，其他老版本和其他模型在以前的旧版本上 bedrock-chatapp-gui-2023.py 支持，如 Claude 2 和 Titan 等。
-* 自动读取该模型对应的典型参数在右上角，可以手工调整，每单次对话都会调用修改后的参数
-* 系统提示词在右下角，可以保存多个系统提示词模版
-* 每次对话都会带上历史对话，直到你点 ClearContext 清理历史或 CleanScreen 清屏。所有历史对话都会记录到当前运行目录下的 bedrock_chatapp_history.log；每次对话都会带上之前的历史记录给API作为上下文，如果不希望带上历史上下文可以清除对话（不会清除log）
-* 对于多模态模型，用 Image/PDF 按钮可以上传图片或PDF(本地自动转成图片)，支持连续上传多张图片，再结合输入文字来一次性提问
-* 注意：boto3 >= 1.34.55
-* 可选：建议安装最新的Python 3.12 以及更新对应的 tk3.12
+## 🚀 主要特性
 
-参考安装命令
+### 核心功能
+- **多模型支持**: Claude 3.5/4, Amazon Nova 系列, DeepSeek R1
+- **多模态交互**: 支持文本、图片、PDF 文档
+- **流式响应**: 实时显示 AI 回复
+- **上下文管理**: 可选择性记忆对话历史
 
-```shell
-brew install python@3.12   
-brew install python-tk@3.12
-pip install -r requirements.txt --break-system-packages
+### 用户界面
+- **现代化 UI**: 清晰直观的界面设计
+- **可调整布局**: 可调整窗口分割比例
+- **搜索功能**: 在聊天历史中搜索内容
+- **导出功能**: 支持导出聊天记录为文本或 JSON
+
+### 高级功能
+- **参数配置**: 可视化配置模型参数
+- **系统提示词管理**: 创建、保存、管理系统提示词
+- **文件处理**: 智能处理图片、PDF、文本文件
+- **错误处理**: 完善的错误处理和重试机制
+
+## 📦 安装
+
+### 环境要求
+- Python 3.8+
+- AWS 账户和凭证
+- 支持的操作系统: Windows, macOS, Linux
+
+### 安装步骤
+
+1. **克隆仓库**
+```bash
+git clone https://github.com/yourusername/aws-bedrock-chatapp.git
+cd aws-bedrock-chatapp
 ```
 
-* Linux  
-
-运行命令
-
-```shell
-git clone https://github.com/hawkey999/bedrock-chatapp-gui
-python3 bedrock-chatapp-gui/bedrock-chatapp-gui.py
+2. **创建虚拟环境**
+```bash
+python -m venv venv
+source venv/bin/activate  # Linux/macOS
+# 或
+venv\Scripts\activate  # Windows
 ```
 
-* Windows
+3. **安装依赖**
+```bash
+pip install -r requirements.txt
+```
 
-除了类似Linux那样通过Python来运行之外，也可以直接[下载](https://github.com/hawkey999/bedrock-chatapp-gui/releases/tag/v2.0)已经打包的exe包运行，无须安装python和相关依赖包
+4. **配置 AWS 凭证**
+```bash
+# 方法1: 使用 AWS CLI
+aws configure
 
-* IAM
+# 方法2: 手动创建 ~/.aws/credentials 文件
+[default]
+aws_access_key_id = YOUR_ACCESS_KEY
+aws_secret_access_key = YOUR_SECRET_KEY
+region = us-east-1
+```
 
-如果以前没有用过 AWS CLI （命令行），则需要在 AWS IAM 中创建一个用户，然后把 Access Key 和 Secret Key 配置到本地的 AWS Profile 中，具体步骤可以参考[创建IAM User](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_users_create.html#id_users_create_console)。注意，这个 IAM 用户需要有 Bedrock 的权限。如果没有本地的 AWS Profile，首次运行本程序的时候，会在命令行中提示你输入 Access Key 和 Secret Key ，以及所在的 Region，然后会自动创建一个本地的 AWS Profile。  
-如果以前配置过 AWS CLI，则不会再提示配置，而是直接读取本地的 AWS Profile 运行，有多个 Profile 的，可以在界面中切换。
+5. **运行应用**
+```bash
+python main.py
+```
 
-![img](./img/img2.png)
+## 🛠️ 配置
+
+### 配置文件
+应用使用 `config/settings.yaml` 进行配置，包括：
+- 应用设置（窗口大小、字体等）
+- AWS 区域和模型列表
+- 模型参数预设
+- 代理设置
+
+### 系统提示词
+- 支持多个系统提示词预设
+- 可通过界面创建、编辑、删除
+- 自动保存到 `bedrock_chatapp_prompt.json`
+
+## 🎯 使用指南
+
+### 基本操作
+1. **选择配置**: 在顶部工具栏选择 AWS Profile、区域、模型等
+2. **输入消息**: 在底部输入框输入文本
+3. **发送消息**: 点击发送按钮或按 Ctrl+Enter
+4. **上传文件**: 点击"Upload File"按钮上传图片或文档
+
+### 快捷键
+- `Ctrl+Enter`: 发送消息
+- `Ctrl+L`: 清除上下文
+- `Ctrl+K`: 清除屏幕
+- `Ctrl+O`: 上传文件
+
+### 高级功能
+- **参数调整**: 在右侧面板调整模型参数
+- **搜索历史**: 使用聊天历史面板的搜索功能
+- **导出对话**: 导出聊天记录为文件
+- **多模态**: 上传图片进行视觉问答
+
+## 🏗️ 项目结构
+
+```
+aws-bedrock-chatapp/
+├── config/                 # 配置管理
+│   ├── config_manager.py   # 配置管理器
+│   └── settings.yaml       # 应用配置
+├── models/                 # AI 模型相关
+│   └── bedrock_client.py   # Bedrock 客户端
+├── utils/                  # 工具函数
+│   └── file_handler.py     # 文件处理
+├── ui/                     # 用户界面
+│   ├── main_window.py      # 主窗口
+│   └── components/         # UI 组件
+│       └── chat_history.py # 聊天历史组件
+├── tests/                  # 单元测试
+├── main.py                 # 应用入口
+├── requirements.txt        # 依赖列表
+└── README.md              # 说明文档
+```
+
+## 🧪 测试
+
+运行单元测试：
+```bash
+# 运行所有测试
+python -m pytest
+
+# 运行特定测试
+python -m pytest tests/test_config_manager.py
+
+# 运行测试并生成覆盖率报告
+python -m pytest --cov=config --cov=models --cov=utils --cov=ui
+```
+
+## 🔧 开发
+
+### 代码质量
+```bash
+# 代码格式化
+black .
+
+# 代码检查
+flake8 .
+
+# 类型检查
+mypy .
+```
+
+### 打包分发
+```bash
+# 构建包
+python setup.py sdist bdist_wheel
+
+# 使用 PyInstaller 打包可执行文件
+pip install pyinstaller
+pyinstaller --onefile --windowed main.py
+```
+
+## 📋 支持的模型
+
+### Anthropic Claude
+- Claude 3.5 Sonnet/Haiku
+- Claude 4 Sonnet/Opus
+- Claude 3.7 Sonnet
+- 支持思维链推理模式
+
+### Amazon Nova
+- Nova Premier/Pro/Lite/Micro
+- 多模态支持
+
+### DeepSeek
+- DeepSeek R1
+- 推理优化模型
+
+## 🔒 安全注意事项
+
+- **凭证安全**: 不要在代码中硬编码 AWS 凭证
+- **日志安全**: 敏感信息不会记录到日志文件
+- **输入验证**: 对用户输入进行验证和清理
+- **文件安全**: 上传文件大小和类型限制
+
+## 🐛 故障排除
+
+### 常见问题
+
+1. **AWS 凭证错误**
+   - 检查 `~/.aws/credentials` 文件
+   - 确认 IAM 用户有 Bedrock 访问权限
+
+2. **模型访问被拒绝**
+   - 在 AWS 控制台启用相应的 Bedrock 模型
+   - 检查区域设置是否正确
+
+3. **网络连接问题**
+   - 检查代理设置
+   - 确认网络连接正常
+
+4. **依赖安装失败**
+   - 更新 pip: `pip install --upgrade pip`
+   - 使用国内镜像: `pip install -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt`
+
+## 📝 更新日志
+
+### v2.0.0 (当前版本)
+- 完全重构代码架构
+- 添加现代化 UI 组件
+- 增强错误处理和重试机制
+- 添加单元测试
+- 支持更多文件格式
+- 改进配置管理
+
+### v1.0.0
+- 基础聊天功能
+- 多模型支持
+- 简单文件上传
+
+## 🤝 贡献
+
+欢迎提交 Issue 和 Pull Request！
+
+1. Fork 项目
+2. 创建功能分支
+3. 提交更改
+4. 推送到分支
+5. 创建 Pull Request
+
+## 📄 许可证
+
+本项目采用 MIT 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情。
+
+## 👨‍💻 作者
+
+**James Huang** - 初始开发
+
+## 🙏 致谢
+
+- AWS Bedrock 团队
+- Anthropic Claude 团队
+- 开源社区的贡献者们

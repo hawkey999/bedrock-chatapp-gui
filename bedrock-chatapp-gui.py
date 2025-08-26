@@ -35,13 +35,30 @@ def get_regions():
     return ('us-west-2', 'us-east-1', 'ap-southeast-1', 'ap-northeast-1', 'eu-central-1', 'ap-southeast-2', 'eu-west-3', 'ap-south-1')
 
 def get_modelIds():
-    return ('us.anthropic.claude-3-7-sonnet-20250219-v1:0', 'us.anthropic.claude-sonnet-4-20250514-v1:0', 'us.anthropic.claude-opus-4-20250514-v1:0', 'us.deepseek.r1-v1:0', 'us.amazon.nova-premier-v1:0', 'anthropic.claude-3-5-sonnet-20241022-v2:0', 'anthropic.claude-3-5-haiku-20241022-v1:0', 'us.amazon.nova-pro-v1:0','us.amazon.nova-lite-v1:0', 'us.amazon.nova-micro-v1:0')
+    return ('us.anthropic.claude-3-7-sonnet-20250219-v1:0', 'us.anthropic.claude-sonnet-4-20250514-v1:0', 'us.anthropic.claude-opus-4-1-20250805-v1:0', 'us.anthropic.claude-opus-4-20250514-v1:0', 'openai.gpt-oss-120b-1:0', 'openai.gpt-oss-20b-1:0', 'us.deepseek.r1-v1:0', 'us.amazon.nova-premier-v1:0', 'anthropic.claude-3-5-sonnet-20241022-v2:0', 'anthropic.claude-3-5-haiku-20241022-v1:0', 'us.amazon.nova-pro-v1:0','us.amazon.nova-lite-v1:0', 'us.amazon.nova-micro-v1:0')
 
 def get_proxy():
     return ('NoProxy', 'Local')
 
 default_para = {  # 可以在运行之后的界面上修改
     "us.anthropic.claude-sonnet-4-20250514-v1:0": {
+        "No-Think": {
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": 32000,
+            "temperature": 0.5, 
+            "top_k": 250,       
+            "top_p": 1,         
+        },
+        "Think": {
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": 32000,
+            "thinking": {
+                "type": "enabled",
+                "budget_tokens": 16000
+            },
+        },
+    },
+    "us.anthropic.claude-opus-4-1-20250805-v1:0": {
         "No-Think": {
             "anthropic_version": "bedrock-2023-05-31",
             "max_tokens": 32000,
@@ -150,6 +167,20 @@ default_para = {  # 可以在运行之后的界面上修改
             "top_k": 20,       
             "top_p": 0.9,
         },
+    },
+    "openai.gpt-oss-20b-1:0":{
+        "Default": {
+            "max_completion_tokens": 8192,
+            "temperature": 0.7,
+            "top_p": 0.9
+        }
+    },
+    "openai.gpt-oss-120b-1:0":{
+        "Default": {
+            "max_completion_tokens": 8192,
+            "temperature": 0.7,
+            "top_p": 0.9
+        }
     }
 }
 
@@ -448,6 +479,8 @@ class ChatApp:
                     user_message = {"role": "user", "content": question}
                 elif 'deepseek' in self.modelId:
                     user_message = {"role": "user", "content": question}
+                elif 'openai' in self.modelId:
+                    user_message = {"role": "user", "content": question}
 
             self.save_history(user_message)
             logger.info(json.dumps(user_message, ensure_ascii=False))
@@ -473,6 +506,10 @@ class ChatApp:
                 #formatted_prompt = f"""<｜begin▁of▁sentence｜><System>{system_prompt}<｜User｜>{prompt}\n"""
                 formatted_prompt = f"""<｜begin▁of▁sentence｜><｜User｜>{prompt}<｜Assistant｜><think>\n"""
                 bedrock_para['prompt'] = formatted_prompt
+            elif 'openai' in self.modelId:
+                bedrock_para = json.loads(self.bedrock_para_text.get("1.0", tk.END).strip())
+                bedrock_para['messages']=[{"role": "system", "content": system_prompt}]
+                bedrock_para['messages'].append(user_message)
 
             invoke_body = json.dumps(bedrock_para)
             # 异步调用Bedrock API
@@ -503,64 +540,73 @@ class ChatApp:
                                                       read_timeout=15)
             self.client = session.client("bedrock-runtime", region_name=self.region, config=clientConfig)
 
-            # Invoke streaming model 
-            response = self.client.invoke_model_with_response_stream(body=invoke_body, modelId=self.modelId, accept=accept, contentType=contentType)
-            for event in response.get('body'):
-                answer = ""
-                chunk_str = json.loads(event['chunk']['bytes'].decode('utf-8'))
-                if 'amazon.nova-' in self.modelId:
-                    content_block_delta = chunk_str.get("contentBlockDelta")
-                    invocationMetrics = chunk_str.get("amazon-bedrock-invocationMetrics")
-                    if invocationMetrics:
-                        hints = "\n"+json.dumps(invocationMetrics)
-                    else:
-                        hints = ""
-                    if content_block_delta:
-                        answer = content_block_delta.get("delta").get("text")
-                elif 'anthropic.claude-' in self.modelId:
-                    if chunk_str['type'] == "message_start":
-                        input_tokens = json.dumps(chunk_str['message']['usage']['input_tokens'])
-                        hints = f"Input tokens: {input_tokens}\n******Answer******\n"
-                    elif chunk_str['type'] == "content_block_start" and chunk_str['content_block']['type'] == 'thinking':
-                            answer = "\n***Thinking START***\n"
-                    elif chunk_str['type'] == "content_block_delta":
-                        if chunk_str['delta']['type'] == 'text_delta':
-                            answer = chunk_str['delta']['text']
-                        elif chunk_str['delta']['type'] == 'thinking_delta':
-                            answer = chunk_str['delta']['thinking']
-                        elif chunk_str['delta']['type'] == 'signature_delta':
-                            answer = "\n***Thinking END***\n\n"
-                    elif chunk_str['type'] == "message_delta":
-                        hints=f"""\n******Answer END******\n\nStop reason: {chunk_str['delta']['stop_reason']}; Stop sequence: {chunk_str['delta']['stop_sequence']}; Output tokens: {chunk_str['usage']['output_tokens']}\n\n"""
-                    elif chunk_str['type'] == "error":
-                        hints=json.dumps(chunk_str)
-                elif 'deepseek' in self.modelId:
-                    choices = chunk_str['choices']
-                    answer = choices[0]['text']
-                    if 'amazon-bedrock-invocationMetrics' in chunk_str:
-                        usage = chunk_str['amazon-bedrock-invocationMetrics']
-                        hints = f"""\n******Answer END******\n\nInput tokens: {usage['inputTokenCount']}; Output tokens: {usage['outputTokenCount']}\n"""
-                    else:
-                        hints = ""
-                    if choices[0]['stop_reason'] is not None:
-                        hints += f"Stop reason: {choices[0]['stop_reason']}\n\n"
-                    
-
-                if hints:
-                    self.queue.put(hints)
-                    hints = ""
-                else:
+            # Invode non-streaming model
+            if 'openai' in self.modelId:
+                response = self.client.invoke_model(body=invoke_body, modelId=self.modelId, accept=accept, contentType=contentType)
+                response_body = json.loads(response['body'].read().decode('utf-8'))
+                for choice in response_body['choices']:
+                    answer = choice['message']['content']
+                    if "</reasoning>" in answer:
+                        answer=answer.replace("</reasoning>", "</reasoning>\n\n******Answer******\n")
                     self.queue.put(answer)
                     answers += answer
+
+            # Invoke streaming model 
+            else:
+                response = self.client.invoke_model_with_response_stream(body=invoke_body, modelId=self.modelId, accept=accept, contentType=contentType)
+                for event in response.get('body'):
+                    answer = ""
+                    chunk_str = json.loads(event['chunk']['bytes'].decode('utf-8'))
+                    if 'amazon.nova-' in self.modelId:
+                        content_block_delta = chunk_str.get("contentBlockDelta")
+                        invocationMetrics = chunk_str.get("amazon-bedrock-invocationMetrics")
+                        if invocationMetrics:
+                            hints = "\n"+json.dumps(invocationMetrics)
+                        else:
+                            hints = ""
+                        if content_block_delta:
+                            answer = content_block_delta.get("delta").get("text")
+                    elif 'anthropic.claude-' in self.modelId:
+                        if chunk_str['type'] == "message_start":
+                            input_tokens = json.dumps(chunk_str['message']['usage']['input_tokens'])
+                            hints = f"Input tokens: {input_tokens}\n******Answer******\n"
+                        elif chunk_str['type'] == "content_block_start" and chunk_str['content_block']['type'] == 'thinking':
+                                answer = "\n***Thinking START***\n"
+                        elif chunk_str['type'] == "content_block_delta":
+                            if chunk_str['delta']['type'] == 'text_delta':
+                                answer = chunk_str['delta']['text']
+                            elif chunk_str['delta']['type'] == 'thinking_delta':
+                                answer = chunk_str['delta']['thinking']
+                            elif chunk_str['delta']['type'] == 'signature_delta':
+                                answer = "\n***Thinking END***\n\n"
+                        elif chunk_str['type'] == "message_delta":
+                            hints=f"""\n******Answer END******\n\nStop reason: {chunk_str['delta']['stop_reason']}; Stop sequence: {chunk_str['delta']['stop_sequence']}; Output tokens: {chunk_str['usage']['output_tokens']}\n\n"""
+                        elif chunk_str['type'] == "error":
+                            hints=json.dumps(chunk_str)
+                    elif 'deepseek' in self.modelId:
+                        choices = chunk_str['choices']
+                        answer = choices[0]['text']
+                        if 'amazon-bedrock-invocationMetrics' in chunk_str:
+                            usage = chunk_str['amazon-bedrock-invocationMetrics']
+                            hints = f"""\n******Answer END******\n\nInput tokens: {usage['inputTokenCount']}; Output tokens: {usage['outputTokenCount']}\n"""
+                        else:
+                            hints = ""
+                        if choices[0]['stop_reason'] is not None:
+                            hints += f"Stop reason: {choices[0]['stop_reason']}\n\n"
+
+                    if hints:
+                        self.queue.put(hints)
+                        hints = ""
+                    else:
+                        self.queue.put(answer)
+                        answers += answer
 
         except Exception as e:
             self.queue.put(f"\n\nError: {str(e)}\n")
         
         if 'amazon.nova-' in self.modelId:
             history_record = {"role": "assistant", "content": [{"text": answers}]}
-        elif 'anthropic.claude-' in self.modelId:
-            history_record = {"role": "assistant", "content": answers}
-        elif 'deepseek' in self.modelId:
+        elif 'anthropic.claude-' or 'deepseek' or 'openai' in self.modelId:
             history_record = {"role": "assistant", "content": answers}
 
         self.save_history(history_record)

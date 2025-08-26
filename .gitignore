@@ -1,5 +1,3 @@
-.DS_Store
-
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -156,7 +154,43 @@ cython_debug/
 
 # PyCharm
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
-#  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
-#  and can be added to the global gitignore or merged into this file.  For a more nuclear
-#  option (not recommended) you can uncomment the following to ignore the entire idea folder.
-#.idea/
+#  be added to the global gitignore or merged into this project gitignore.  For a PyCharm
+#  project, it is recommended to include the following files in version control:
+#  *.iml
+#  modules.xml
+#  .idea/misc.xml
+#  .idea/modules.xml
+#  .idea/runConfigurations.xml
+#  .idea/*.iml
+#  .idea/modules
+#  *.iml
+#  *.ipr
+
+# Visual Studio Code
+.vscode/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Application specific
+bedrock_chatapp_history.log
+bedrock_chatapp_prompt.json
+chat_export_*.txt
+*.ico
+
+# AWS credentials (should never be committed)
+.aws/
+aws_credentials.txt
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+tmp/
